@@ -82,7 +82,9 @@ function buildToolbar(): HTMLElement {
 
   /* Marke + markanter Projekttitel */
   const brand = el('div', { class: 'toolbar-brand' });
-  const logo = el('span', { class: 'brand-logo' }, [icon('folder')]);
+  const logo = el('span', { class: 'brand-logo' }, [
+    el('img', { class: 'brand-logo-img', src: 'favicon.svg', alt: 'LDC Projekt Planer Logo' }),
+  ]);
   const brandText = el('div', { class: 'brand-text' });
 
   if (project) {
