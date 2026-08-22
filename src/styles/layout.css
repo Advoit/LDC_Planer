@@ -1,0 +1,94 @@
+/* ── Layout: Responsiv – Mobile First ── */
+
+.list-controls {
+  padding: var(--gap) var(--gap) var(--gap-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+}
+
+.search-input {
+  width: 100%;
+}
+
+.filter-sort-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  flex-wrap: wrap;
+}
+
+.filter-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sort-select {
+  width: auto;
+  margin-left: auto;
+}
+
+.main-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Tablet & Desktop ── */
+
+@media (min-width: 640px) {
+  .toolbar {
+    padding: 10px var(--gap-lg);
+  }
+
+  .list-controls {
+    flex-direction: row;
+    align-items: center;
+    padding: var(--gap) var(--gap-lg);
+  }
+
+  .search-input {
+    max-width: 260px;
+  }
+
+  .task-row {
+    padding: 12px var(--gap-lg);
+  }
+
+  .task-thumb {
+    width: 60px;
+    height: 60px;
+  }
+
+  .modal-sheet.wide {
+    max-width: 720px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .modal-sheet { max-width: 600px; }
+  .modal-sheet.wide { max-width: 760px; }
+
+  .list-controls {
+    padding: var(--gap-lg) var(--gap-lg) var(--gap-sm);
+  }
+
+  .task-row {
+    padding: 14px var(--gap-lg);
+  }
+}
+
+/* ── Sicheres Gebiet bei Notch-Geräten ── */
+
+@supports (padding: env(safe-area-inset-bottom)) {
+  .toolbar {
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-left: max(var(--gap), env(safe-area-inset-left));
+    padding-right: max(var(--gap), env(safe-area-inset-right));
+  }
+
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <clipPath id="rounded"><rect x="0" y="0" width="32" height="32" rx="6"/></clipPath>
+  </defs>
+  <g clip-path="url(#rounded)">
+    <rect width="32" height="32" fill="#007AFF"/>
+    <rect x="6" y="7" width="20" height="19" rx="3" fill="#FFFFFF"/>
+    <g transform="translate(7.5, 10)">
+      <rect x="0" y="0" width="13" height="2" rx="1" fill="#C6C6C8"/>
+      <rect x="0" y="4" width="13" height="2" rx="1" fill="#C6C6C8"/>
+      <rect x="0" y="8" width="13" height="2" rx="1" fill="#C6C6C8"/>
+      <rect x="14" y="0.5" width="3" height="3" rx="1.5" fill="#007AFF"/>
+      <polygon points="15.2,1.8 16,2.4 17.8,0.8" fill="none" stroke="#FFFFFF" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>

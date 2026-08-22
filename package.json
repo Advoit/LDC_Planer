@@ -1,0 +1,23 @@
+{
+  "name": "ldc-projekt-planer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline-first PWA zum Planen und Ausführen von Projekten – lokal, ohne Server.",
+  "scripts": {
+    "dev": "vite",
+    "icons": "node scripts/generate-icons.mjs",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^6.0.0",
+    "vite-plugin-pwa": "^0.21.1",
+    "vitest": "^2.1.8"
+  }
+}
