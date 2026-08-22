@@ -22,6 +22,8 @@ describe('migrateProject', () => {
     expect(project.tasks[0].images).toEqual([]);
     expect(project.tasks[0].afterImages).toEqual([]);
     expect(project.tasks[0].material).toEqual([]);
+    expect(project.tasks[0].documents).toEqual([]);
+    expect(project.documents).toEqual([]);
     expect(project.tasks[1].status).toBe('hinweis');
   });
 

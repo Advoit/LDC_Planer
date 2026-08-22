@@ -1,9 +1,9 @@
-/* ── Projekt-Import: .ldcproj-ZIP einlesen ── */
+/* ── Projekt-Import: Projekt-ZIP einlesen ── */
 
 import { unzipSync } from 'fflate';
-import type { Project, Task, TaskImage } from '../domain/types';
+import type { Project, ProjectDocument, Task, TaskImage } from '../domain/types';
 import { sha256Hex } from '../core/hash';
-import type { ExportedProject, ExportedTask, ImageRef } from './export';
+import type { ExportedProject, ExportedTask, DocumentRef, ImageRef } from './export';
 import { migrateProject } from '../core/migrate';
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -62,6 +62,33 @@ async function loadImages(
   return images;
 }
 
+async function loadDocuments(
+  fileMap: Map<string, Uint8Array>,
+  refs: DocumentRef[],
+  baseDir: string,
+): Promise<ProjectDocument[]> {
+  const documents: ProjectDocument[] = [];
+  for (const ref of refs) {
+    const path =
+      ref.file.startsWith('/') || ref.file.startsWith('.')
+        ? ref.file
+        : `${baseDir}/${ref.file}`;
+    const bytes = fileMap.get(path);
+    if (!bytes) continue;
+    const copy = new Uint8Array(bytes); // eigene ArrayBuffer-Kopie
+    const hash = await sha256Hex(copy.buffer);
+    documents.push({
+      id: ref.id,
+      name: ref.name,
+      mime: ref.mime,
+      size: bytes.length,
+      dataUrl: `data:${ref.mime};base64,${bytesToBase64(bytes)}`,
+      hash,
+    });
+  }
+  return documents;
+}
+
 async function rebuildTasks(
   fileMap: Map<string, Uint8Array>,
   exportedTasks: ExportedTask[],
@@ -80,6 +107,7 @@ async function rebuildTasks(
         thumbnail = bytesToDataUrl(thumbBytes, et.thumbnail);
       }
     }
+    const documents = await loadDocuments(fileMap, et.documents ?? [], taskDir);
     tasks.push({
       id: et.id,
       projectId: et.projectId,
@@ -92,6 +120,7 @@ async function rebuildTasks(
       thumbnailSourceId: et.thumbnailSourceId ?? null,
       material: et.material ?? [],
       plannedWork: et.plannedWork ?? '',
+      documents,
       status: et.status ?? 'offen',
       editedBy: et.editedBy ?? '',
       editedAt: et.editedAt ?? '',
@@ -102,7 +131,7 @@ async function rebuildTasks(
   return tasks;
 }
 
-export async function parseLdcproj(
+export async function parseProjectZip(
   buffer: ArrayBuffer,
 ): Promise<Project | null> {
   const data = new Uint8Array(buffer);
@@ -150,6 +179,11 @@ export async function parseLdcproj(
   }
 
   const tasks = await rebuildTasks(fileMap, exportedTasks, root);
+  const documents = await loadDocuments(
+    fileMap,
+    exportedProject.documents ?? [],
+    root,
+  );
 
   const project: Project = migrateProject({
     schemaVersion: exportedProject.schemaVersion,
@@ -160,6 +194,7 @@ export async function parseLdcproj(
     createdAt: exportedProject.createdAt,
     updatedAt: exportedProject.updatedAt,
     tasks,
+    documents,
   });
 
   return project;

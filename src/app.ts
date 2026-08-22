@@ -9,12 +9,15 @@ import { openNewProjectFlow } from './ui/project-form';
 import { confirmDialog } from './ui/modal';
 import { openMaterialExportModal } from './ui/export-flow';
 import { showMergeOrOverwriteDialog, runMergeFlow } from './ui/merge-flow';
+import { openProjectDocumentsModal } from './ui/project-documents';
+import { openPrintWindow } from './ui/print';
 import { loadStoredProject, storeProject } from './core/storage';
 import { migrateProject } from './core/migrate';
 import { touchProject } from './domain/project';
 import { createTask } from './domain/task';
-import { buildLdcproj, ldcprojFileName } from './io/export';
-import { parseLdcproj } from './io/import';
+import { buildProjectZip, projectZipFileName } from './io/export';
+import { parseProjectZip } from './io/import';
+import { buildProjectReport } from './io/project-export';
 import { canMergeProjects } from './domain/merge';
 import type { Project, Task } from './domain/types';
 
@@ -76,12 +79,34 @@ function render(): void {
 
 function buildToolbar(): HTMLElement {
   const bar = el('header', { class: 'toolbar' });
-  const title = el('h1', { class: 'brand' }, ['LDC Projekte']);
+
+  /* Marke + markanter Projekttitel */
+  const brand = el('div', { class: 'toolbar-brand' });
+  const logo = el('span', { class: 'brand-logo' }, [icon('folder')]);
+  const brandText = el('div', { class: 'brand-text' });
 
   if (project) {
-    title.appendChild(el('span', { class: 'brand-sub' }, [` | ${project.name}`]));
+    brandText.appendChild(el('span', { class: 'brand-kicker' }, ['LDC Projekte']));
+    brandText.appendChild(
+      el('h1', { class: 'project-title', title: project.name }, [project.name]),
+    );
+    const openCount = project.tasks.filter((t) => t.status !== 'behoben').length;
+    brandText.appendChild(
+      el('span', { class: 'project-sub' }, [
+        project.location,
+        ` · ${project.tasks.length} ${project.tasks.length === 1 ? 'Aufgabe' : 'Aufgaben'}`,
+        ...(openCount > 0 ? [` · ${openCount} offen`] : []),
+      ]),
+    );
+  } else {
+    brandText.appendChild(el('h1', { class: 'brand-title' }, ['LDC Projekte']));
   }
 
+  brand.appendChild(logo);
+  brand.appendChild(brandText);
+  bar.appendChild(brand);
+
+  /* Aktionen */
   const actions = el('div', { class: 'toolbar-actions' });
 
   const btn = (
@@ -92,8 +117,8 @@ function buildToolbar(): HTMLElement {
   ) => {
     const b = el(
       'button',
-      { class: `toolbar-btn ${extra}`, type: 'button', title: label },
-      [icon(iconName), ` ${label}`],
+      { class: `toolbar-btn ${extra}`, type: 'button', title: label, 'aria-label': label },
+      [icon(iconName), el('span', { class: 'btn-label' }, [label])],
     ) as HTMLButtonElement;
     b.addEventListener('click', click);
     return b;
@@ -106,7 +131,9 @@ function buildToolbar(): HTMLElement {
   actions.appendChild(btn('Laden', 'upload', () => void handleLoad()));
 
   if (project) {
-    actions.appendChild(btn('Neue Aufgabe', 'plus', () => void handleNewTask()));
+    actions.appendChild(btn('Unterlagen', 'paperclip', () => void handleProjectDocuments()));
+    actions.appendChild(btn('Projekt Export', 'file', () => void handleProjectExport()));
+    actions.appendChild(btn('Neue Aufgabe', 'plus', () => void handleNewTask(), 'primary'));
     const editLabel = editMode ? 'Bearb. Ende' : 'Editieren';
     const editExtra = editMode ? 'active' : '';
     actions.appendChild(btn(editLabel, 'pencil', () => toggleEditMode(), editExtra));
@@ -117,7 +144,6 @@ function buildToolbar(): HTMLElement {
     );
   }
 
-  bar.appendChild(title);
   bar.appendChild(actions);
   return bar;
 }
@@ -128,7 +154,7 @@ function buildMain(): void {
       el('div', { class: 'empty-icon' }, [icon('folder')]),
       el('h2', {}, ['Kein Projekt geöffnet']),
       el('p', {}, [
-        'Legen Sie ein neues Projekt an oder laden Sie eine gesicherte .ldcproj-Datei.',
+        'Legen Sie ein neues Projekt an oder laden Sie eine gesicherte Projekt-ZIP (.zip).',
       ]),
       el('button', { class: 'btn btn-primary btn-lg', type: 'button' }, [
         icon('folder'),
@@ -192,19 +218,20 @@ async function handleNewProject(): Promise<void> {
 async function handleSave(): Promise<void> {
   if (!project) return;
   await persist();
-  const blob = buildLdcproj(project);
-  const name = ldcprojFileName(project);
+  const blob = buildProjectZip(project);
+  const name = projectZipFileName(project);
   downloadBlob(blob, name);
   showToast('Projekt exportiert.', 'success');
 }
 
 async function handleLoad(): Promise<void> {
-  const file = await pickFile('.ldcproj,.zip');
+  /* .ldcproj bleibt aus Abwärtskompatibilität wählbar (identisches ZIP-Format) */
+  const file = await pickFile('.zip,.ldcproj');
   if (!file) return;
   const buf = await file.arrayBuffer();
-  const imported = await parseLdcproj(buf);
+  const imported = await parseProjectZip(buf);
   if (!imported) {
-    showToast('Die Datei ist keine gültige .ldcproj-Datei.', 'error');
+    showToast('Die Datei ist keine gültige Projekt-ZIP-Datei.', 'error');
     return;
   }
 
@@ -260,6 +287,22 @@ async function handleNewTask(): Promise<void> {
   schedulePersist();
   render();
   showToast('Aufgabe erstellt.', 'success');
+}
+
+async function handleProjectDocuments(): Promise<void> {
+  if (!project) return;
+  const docs = await openProjectDocumentsModal(project);
+  if (!docs) return;
+  project = touchProject({ ...project, documents: docs });
+  schedulePersist();
+  render();
+  showToast('Unterlagen gespeichert.', 'success');
+}
+
+function handleProjectExport(): void {
+  if (!project) return;
+  const html = buildProjectReport(project);
+  openPrintWindow(html);
 }
 
 async function handleEditTask(taskId: string): Promise<void> {

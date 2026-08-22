@@ -1,7 +1,7 @@
 /* ── Datenmigration – abwärtskompatibel zu alten App-Versionen ── */
 
 import type { Project, Task } from '../domain/types';
-import type { TaskImage } from '../domain/types';
+import type { ProjectDocument, TaskImage } from '../domain/types';
 
 export const CURRENT_SCHEMA_VERSION = 1;
 
@@ -26,7 +26,8 @@ export function migrateProject(raw: unknown): Project {
     );
   }
 
-  /* Alle Tasks tiefensanft normalisieren (fehlende Felder ergänzen) */
+  /* Projekt und alle Tasks tiefensanft normalisieren (fehlende Felder ergänzen) */
+  current = normalizeProject(current);
   if (Array.isArray(current.tasks)) {
     current.tasks = current.tasks.map(normalizeTask);
   } else {
@@ -34,6 +35,22 @@ export function migrateProject(raw: unknown): Project {
   }
 
   return current;
+}
+
+/* ── Projekt-Normalisierung (ergänzt fehlende Felder, z. B. documents) ── */
+
+function normalizeProject(p: Project): Project {
+  return {
+    schemaVersion: p.schemaVersion,
+    id: typeof p.id === 'string' ? p.id : '',
+    name: typeof p.name === 'string' ? p.name : '',
+    location: typeof p.location === 'string' ? p.location : '',
+    description: typeof p.description === 'string' ? p.description : '',
+    createdAt: typeof p.createdAt === 'string' ? p.createdAt : new Date().toISOString(),
+    updatedAt: typeof p.updatedAt === 'string' ? p.updatedAt : new Date().toISOString(),
+    tasks: Array.isArray(p.tasks) ? p.tasks : [],
+    documents: normalizeDocuments(p.documents),
+  };
 }
 
 /* ── Migration v1: Normalisierung fehlender Felder ── */
@@ -50,6 +67,7 @@ function migrateToV1(raw: unknown): Project {
     createdAt: typeof p.createdAt === 'string' ? p.createdAt : now,
     updatedAt: typeof p.updatedAt === 'string' ? p.updatedAt : now,
     tasks: Array.isArray(p.tasks) ? p.tasks : [],
+    documents: normalizeDocuments(p.documents),
   };
 }
 
@@ -69,6 +87,7 @@ function normalizeTask(t: Partial<Task>): Task {
       typeof t.thumbnailSourceId === 'string' ? t.thumbnailSourceId : null,
     material: Array.isArray(t.material) ? t.material : [],
     plannedWork: typeof t.plannedWork === 'string' ? t.plannedWork : '',
+    documents: normalizeDocuments(t.documents),
     status:
       typeof t.status === 'string' &&
       ['offen', 'hinweis', 'behoben'].includes(t.status)
@@ -91,5 +110,21 @@ function normalizeImages(images: unknown): TaskImage[] {
         typeof (img as TaskImage).id === 'string' &&
         typeof (img as TaskImage).dataUrl === 'string' &&
         typeof (img as TaskImage).hash === 'string',
+    );
+}
+
+function normalizeDocuments(documents: unknown): ProjectDocument[] {
+  if (!Array.isArray(documents)) return [];
+  return documents
+    .filter(
+      (doc: unknown): doc is ProjectDocument =>
+        typeof doc === 'object' &&
+        doc !== null &&
+        typeof (doc as ProjectDocument).id === 'string' &&
+        typeof (doc as ProjectDocument).name === 'string' &&
+        typeof (doc as ProjectDocument).mime === 'string' &&
+        typeof (doc as ProjectDocument).size === 'number' &&
+        typeof (doc as ProjectDocument).dataUrl === 'string' &&
+        typeof (doc as ProjectDocument).hash === 'string',
     );
 }

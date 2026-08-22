@@ -12,6 +12,7 @@ function makeProject(id = 'ABCD1234'): Project {
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     tasks: [],
+    documents: [],
   };
 }
 
@@ -33,6 +34,7 @@ function makeTask(id: string, name: string, extra: Partial<Task> = {}): Task {
     editedAt: '',
     hintText: '',
     afterImages: [],
+    documents: [],
     ...extra,
   };
 }
@@ -105,6 +107,24 @@ describe('mergeProjects', () => {
     const result = await mergeProjects(local, imported, () => 'imported');
     expect(result.merged.tasks[0].name).toBe('Y');
     expect(result.merged.tasks[0].images.map((i) => i.hash)).toEqual(['hash-i', 'hash-l']);
+  });
+
+  it('führt Projekt-Unterlagen per Hash zusammen (dedupliziert)', async () => {
+    const makeDoc = (id: string, hash: string) => ({
+      id,
+      name: `${id}.pdf`,
+      mime: 'application/pdf',
+      size: 100,
+      dataUrl: `data:application/pdf;base64,${id}`,
+      hash,
+    });
+    const local = makeProject('AAAA1111');
+    local.documents = [makeDoc('d1', 'hash-1')];
+    const imported = makeProject('AAAA1111');
+    imported.documents = [makeDoc('d1', 'hash-1'), makeDoc('d2', 'hash-2')];
+
+    const result = await mergeProjects(local, imported, () => 'local');
+    expect(result.merged.documents.map((d) => d.hash)).toEqual(['hash-1', 'hash-2']);
   });
 
   it('fügt nur im Import vorhandene Tasks hinzu und behält nur lokale', async () => {

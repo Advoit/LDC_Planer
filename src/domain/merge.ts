@@ -1,6 +1,6 @@
 /* ── Projekt-Zusammenführung ── */
 
-import type { Project, Task, TaskImage } from './types';
+import type { Project, ProjectDocument, Task, TaskImage } from './types';
 
 /* ── Typen ── */
 
@@ -66,6 +66,7 @@ export async function mergeProjects(
 
   const merged: Project = {
     ...local,
+    documents: mergeDocumentLists(local.documents, imported.documents),
     tasks: mergedTasks,
     updatedAt: now,
   };
@@ -95,6 +96,23 @@ function materialEqual(a: Task['material'], b: Task['material']): boolean {
   const sa = [...a].map(key).sort();
   const sb = [...b].map(key).sort();
   return sa.every((v, i) => v === sb[i]);
+}
+
+/* ── Projekt-Unterlagen mergen (Hash-Deduplizierung) ── */
+
+function mergeDocumentLists(
+  a: ProjectDocument[] | undefined,
+  b: ProjectDocument[] | undefined,
+): ProjectDocument[] {
+  const known = new Set((a ?? []).map((d) => d.hash));
+  const out = [...(a ?? [])];
+  for (const doc of b ?? []) {
+    if (!known.has(doc.hash)) {
+      out.push(doc);
+      known.add(doc.hash);
+    }
+  }
+  return out;
 }
 
 /* ── Bilder mergen (Hash-Deduplizierung) ── */

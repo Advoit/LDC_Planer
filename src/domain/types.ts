@@ -23,6 +23,15 @@ export interface TaskImage {
   hash: string; // SHA-256 der Roh-Bilddaten
 }
 
+export interface ProjectDocument {
+  id: string;
+  name: string; // Original-Dateiname
+  mime: string; // MIME-Typ
+  size: number; // Größe in Byte
+  dataUrl: string; // data:<mime>;base64,…
+  hash: string; // SHA-256 der Roh-Daten
+}
+
 export interface MaterialItem {
   id: string;
   name: string;
@@ -46,6 +55,7 @@ export interface Task {
   thumbnailSourceId: string | null; // ID des Quell-Bildes für thumbnail
   material: MaterialItem[];
   plannedWork: string; // hh:mm, leer erlaubt
+  documents: ProjectDocument[]; // Pläne, Anhänge, sonstige Unterlagen
 
   /* Status-Felder */
   status: TaskStatus;
@@ -66,4 +76,5 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   tasks: Task[];
+  documents: ProjectDocument[]; // Projektbezogene Unterlagen (Pläne etc.)
 }

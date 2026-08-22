@@ -53,6 +53,8 @@ export function icon(name: string): SVGElement {
     image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
     info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
     clipboard: '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/>',
+    file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+    paperclip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
   };
   svg.innerHTML = paths[name] ?? '';
   return svg;
@@ -80,6 +82,25 @@ export function formatDateTime(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+/** Startet einen Download einer dataURL unter dem angegebenen Dateinamen. */
+export function downloadDataUrl(dataUrl: string, filename: string): void {
+  const commaIdx = dataUrl.indexOf(',');
+  if (commaIdx < 0) return;
+  const mime = /^data:([^;,]+)/i.exec(dataUrl)?.[1] ?? 'application/octet-stream';
+  const b64 = dataUrl.slice(commaIdx + 1);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  downloadBlob(new Blob([bytes], { type: mime }), filename);
+}
+
+/** Formatiert eine Byte-Größe lesbar (B / KB / MB). */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /** Startet einen Download mit Blob. */

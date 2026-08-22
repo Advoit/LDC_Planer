@@ -4,6 +4,7 @@ import { el } from './dom';
 import { openModal, confirmDialog } from './modal';
 import { showToast } from './toast';
 import { createImageUploader } from './image-upload';
+import { createDocumentUploader } from './document-upload';
 import { createMaterialEditor } from './material-editor';
 import { validateTaskInput } from '../domain/task';
 import type { NewTaskInput } from '../domain/task';
@@ -32,6 +33,13 @@ export function openTaskForm(opts: {
     thumbnailSourceId: task?.thumbnailSourceId ?? null,
     showThumbnailPicker: true,
     label: 'Aufgabenbilder (Vorher)',
+  });
+
+  /* Dokument-Uploader */
+  const documentUploader = createDocumentUploader({
+    documents: task?.documents ?? [],
+    label: 'Dokumente (Pläne, Anhänge)',
+    hint: 'Weitere Unterlagen zur Aufgabe, z. B. Pläne oder Angebote.',
   });
 
   /* Material-Editor */
@@ -65,17 +73,19 @@ export function openTaskForm(opts: {
     /* Bilder */
     imageUploader.element,
 
+    /* Dokumente */
+    documentUploader.element,
+
     /* Material */
     materialEditor.element,
 
     /* Geplanter Arbeitsaufwand */
     el('label', { class: 'field-label' }, ['Geplanter Arbeitsaufwand (hh:mm)']),
     el('input', {
-      type: 'text',
+      type: 'time',
       class: 'input input-time',
       name: 'plannedWork',
-      placeholder: 'z.B. 02:30',
-      pattern: '\\d{1,2}:\\d{2}',
+      step: '60',
       value: task?.plannedWork ?? '',
     }),
   ]);
@@ -106,6 +116,7 @@ export function openTaskForm(opts: {
             thumbnailSourceId: imageUploader.getThumbnailSourceId(),
             material: materialEditor.getItems(),
             plannedWork: timeInput?.value?.trim() ?? '',
+            documents: documentUploader.getDocuments(),
           };
 
           const err = validateTaskInput(input);

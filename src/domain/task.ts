@@ -1,7 +1,7 @@
 /* ── Aufgaben-Domain: Erzeugen, Validieren, Statuswechsel ── */
 
 import { randomId } from '../core/id';
-import type { MaterialItem, Task, TaskImage, TaskStatus } from './types';
+import type { MaterialItem, ProjectDocument, Task, TaskImage, TaskStatus } from './types';
 
 export interface NewTaskInput {
   name: string;
@@ -11,6 +11,7 @@ export interface NewTaskInput {
   thumbnailSourceId: string | null;
   material: MaterialItem[];
   plannedWork: string;
+  documents: ProjectDocument[];
 }
 
 export interface StatusFields {
@@ -35,6 +36,7 @@ export function createTask(projectId: string, input: NewTaskInput): Task {
     thumbnailSourceId: input.thumbnailSourceId,
     material: input.material,
     plannedWork: input.plannedWork,
+    documents: input.documents,
     status: 'offen',
     editedBy: '',
     editedAt: '',

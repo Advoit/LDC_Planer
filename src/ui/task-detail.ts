@@ -1,6 +1,6 @@
 /* ── Aufgaben-Detail: Übersicht & Status-Änderung ── */
 
-import { el, formatDateTime } from './dom';
+import { el, formatDateTime, downloadDataUrl, formatFileSize } from './dom';
 import { openModal } from './modal';
 import { showToast } from './toast';
 import { openImageViewer } from './image-viewer';
@@ -48,6 +48,27 @@ export function openTaskDetail(opts: {
       );
     }
     body.appendChild(el('div', { class: 'detail-section' }, [el('h4', {}, ['Material']), matList]));
+  }
+
+  /* Dokumente (read-only) */
+  const taskDocs = task.documents ?? [];
+  if (taskDocs.length > 0) {
+    const docList = el('div', { class: 'detail-doc-list' });
+    for (const doc of taskDocs) {
+      const row = el('div', { class: 'detail-doc-row' }, [
+        el('span', { class: 'detail-doc-name' }, [doc.name]),
+        el('span', { class: 'detail-doc-size' }, [formatFileSize(doc.size)]),
+        el('button', {
+          class: 'btn btn-secondary btn-sm',
+          type: 'button',
+        }, ['Öffnen']),
+      ]);
+      row.querySelector('button')!.addEventListener('click', () => {
+        downloadDataUrl(doc.dataUrl, doc.name);
+      });
+      docList.appendChild(row);
+    }
+    body.appendChild(el('div', { class: 'detail-section' }, [el('h4', {}, ['Dokumente']), docList]));
   }
 
   /* Vorher-Bilder */

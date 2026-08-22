@@ -21,6 +21,7 @@ export function createProject(input: NewProjectInput): Project {
     createdAt: now,
     updatedAt: now,
     tasks: [],
+    documents: [],
   };
 }
 
