@@ -93,9 +93,7 @@ export async function buildMaterialPdf(
     month: '2-digit',
     year: 'numeric',
   });
-  const ctx = await createPdfContext(
-    `Exportiert am ${now} mit LDC Projekt Planer`,
-  );
+  const ctx = await createPdfContext(`Exportiert am ${now} mit LDC Planer`);
   const tasks = selectedTasks(project, opts);
 
   ensureSpace(ctx, 90);

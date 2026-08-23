@@ -9,7 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
-        name: 'LDC Projekt Planer',
+        name: 'LDC Planer',
         short_name: 'LDC Planer',
         description:
           'Offline-first PWA zum Planen und Ausführen von Projekten – lokal, ohne Server.',

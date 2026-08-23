@@ -1,4 +1,4 @@
-# LDC Projekt Planer
+# LDC Planer
 
 Eine **offline-first PWA** zum Planen und Ausführen von Bau- und Sanierungsprojekten. Alle Daten bleiben lokal auf dem Gerät – es wird kein Server oder Backend benötigt.
 

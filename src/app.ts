@@ -86,12 +86,12 @@ function buildToolbar(): HTMLElement {
   /* Marke + markanter Projekttitel */
   const brand = el('div', { class: 'toolbar-brand' });
   const logo = el('span', { class: 'brand-logo' }, [
-    el('img', { class: 'brand-logo-img', src: 'favicon.svg', alt: 'LDC Projekt Planer Logo' }),
+    el('img', { class: 'brand-logo-img', src: 'favicon.svg', alt: 'LDC Planer Logo' }),
   ]);
   const brandText = el('div', { class: 'brand-text' });
 
   if (project) {
-    brandText.appendChild(el('span', { class: 'brand-kicker' }, ['LDC Projekte']));
+    brandText.appendChild(el('span', { class: 'brand-kicker' }, ['LDC Planer']));
     brandText.appendChild(
       el('h1', { class: 'project-title', title: project.name }, [project.name]),
     );
@@ -104,7 +104,7 @@ function buildToolbar(): HTMLElement {
       ]),
     );
   } else {
-    brandText.appendChild(el('h1', { class: 'brand-title' }, ['LDC Projekte']));
+    brandText.appendChild(el('h1', { class: 'brand-title' }, ['LDC Planer']));
   }
 
   brand.appendChild(logo);

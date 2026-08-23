@@ -308,6 +308,136 @@ export async function finalizePdf(
   return ctx.doc.save();
 }
 
+/** Zeichnet eine einzelne zentrierte Zeile. */
+export function drawCentered(
+  ctx: PdfContext,
+  text: string,
+  opts: { size?: number; font?: PDFFont; color?: ReturnType<typeof rgb> } = {},
+): number {
+  const size = opts.size ?? 11;
+  const font = opts.font ?? ctx.font;
+  ensureSpace(ctx, lineHeight(size));
+  const clean = sanitize(text);
+  const w = font.widthOfTextAtSize(clean, size);
+  ctx.page.drawText(clean, {
+    x: MARGIN + (CONTENT_WIDTH - w) / 2,
+    y: ctx.y,
+    size,
+    font,
+    color: opts.color ?? COLORS.text,
+  });
+  ctx.y -= lineHeight(size);
+  return w;
+}
+
+/** Zeichnet einen zentrierten Absatz mit automatischem Umbruch. */
+export function drawCenteredParagraph(
+  ctx: PdfContext,
+  text: string,
+  opts: {
+    size?: number;
+    font?: PDFFont;
+    color?: ReturnType<typeof rgb>;
+    maxWidth?: number;
+    spacingAfter?: number;
+  } = {},
+): void {
+  const size = opts.size ?? 11;
+  const font = opts.font ?? ctx.font;
+  const maxWidth = opts.maxWidth ?? CONTENT_WIDTH;
+  const words = sanitize(text).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return;
+
+  let line = '';
+  const flush = () => {
+    ensureSpace(ctx, lineHeight(size));
+    const w = font.widthOfTextAtSize(line, size);
+    ctx.page.drawText(line, {
+      x: MARGIN + (CONTENT_WIDTH - w) / 2,
+      y: ctx.y,
+      size,
+      font,
+      color: opts.color ?? COLORS.text,
+    });
+    ctx.y -= lineHeight(size);
+  };
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+      line = candidate;
+    } else {
+      flush();
+      line = word;
+    }
+  }
+  if (line) flush();
+  ctx.y -= opts.spacingAfter ?? 0;
+}
+
+function loadImageElement(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Bild konnte nicht geladen werden.'));
+    img.src = dataUrl;
+  });
+}
+
+function roundRectPath(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+/**
+ * Bettet das App-Logo (dataURL) als „App-Icon“ ein: helles Logo auf
+ * blauem, abgerundetem Quadrat (wie das PWA-Icon). Nur im Browser möglich.
+ */
+export async function embedBrandImage(
+  ctx: PdfContext,
+  dataUrl: string,
+  maxWidth: number,
+  maxHeight = 96,
+): Promise<{ image: PDFImage; width: number; height: number } | null> {
+  if (typeof document === 'undefined' || typeof Image === 'undefined') {
+    return null;
+  }
+  try {
+    const img = await loadImageElement(dataUrl);
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const g = canvas.getContext('2d');
+    if (!g) return null;
+
+    /* Blauer, abgerundeter Hintergrund + Logo mittig */
+    roundRectPath(g, 0, 0, size, size, 56);
+    g.fillStyle = '#007AFF';
+    g.fill();
+    const pad = 40;
+    g.drawImage(img, pad, pad, size - pad * 2, size - pad * 2);
+
+    const jpeg = canvas.toDataURL('image/jpeg', 0.9);
+    const image = await ctx.doc.embedJpg(dataUrlToBytes(jpeg));
+    const scaled = image.scaleToFit(maxWidth, maxHeight);
+    return { image, width: scaled.width, height: scaled.height };
+  } catch {
+    return null;
+  }
+}
+
 /** Formatiert ein ISO-Datum (de-DE, TT.MM.JJJJ). */
 export function formatDate(iso: string): string {
   if (!iso) return '';

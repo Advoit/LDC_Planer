@@ -8,8 +8,11 @@ import {
   drawText,
   drawParagraph,
   drawHLine,
+  drawCentered,
+  drawCenteredParagraph,
   drawTable,
   embedImage,
+  embedBrandImage,
   drawImage,
   finalizePdf,
   formatDate,
@@ -36,50 +39,86 @@ function selectedTasks(project: Project, statuses: Set<TaskStatus>): Task[] {
 
 /* ═════════════ Deckblatt ═════════════ */
 
-function drawCover(ctx: PdfContext, project: Project, now: string): void {
-  /* Akzentband oben */
-  ctx.page.drawRectangle({
-    x: 0,
-    y: PAGE_HEIGHT - 12,
-    width: PAGE_WIDTH,
-    height: 12,
-    color: COLORS.blue,
-  });
+/** Lädt das aktuelle App-Logo (favicon.svg) als dataURL. */
+async function fetchLogoDataUrl(): Promise<string | null> {
+  try {
+    const res = await fetch('favicon.svg');
+    if (!res.ok) return null;
+    const text = await res.text();
+    const bytes = new TextEncoder().encode(text);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return `data:image/svg+xml;base64,${btoa(bin)}`;
+  } catch {
+    return null;
+  }
+}
 
-  ctx.y = PAGE_HEIGHT - 96;
+async function drawCover(ctx: PdfContext, project: Project, now: string): Promise<void> {
+  ctx.y = PAGE_HEIGHT - 160;
+
+  /* Logo (App-Icon, zentriert) */
+  const logoDataUrl = await fetchLogoDataUrl();
+  const logo = logoDataUrl
+    ? await embedBrandImage(ctx, logoDataUrl, 84, 84)
+    : null;
+  if (logo) {
+    ensureSpace(ctx, logo.height + 24);
+    ctx.page.drawImage(logo.image, {
+      x: MARGIN + (CONTENT_WIDTH - logo.width) / 2,
+      y: ctx.y - logo.height,
+      width: logo.width,
+      height: logo.height,
+    });
+    ctx.y -= logo.height + 20;
+  }
 
   /* Kicker */
-  ctx.page.drawText('LDC PROJEKT PLANER', {
-    x: MARGIN,
-    y: ctx.y,
-    size: 11,
+  drawCentered(ctx, 'LDC PLANER', {
+    size: 12,
     font: ctx.bold,
     color: COLORS.blue,
   });
-  ctx.y -= 30;
+  ctx.y -= 8;
 
   /* Projektname */
-  drawParagraph(ctx, project.name, { size: 26, font: ctx.bold, spacingAfter: 8 });
+  drawCenteredParagraph(ctx, project.name, {
+    size: 30,
+    font: ctx.bold,
+    maxWidth: CONTENT_WIDTH - 40,
+    spacingAfter: 18,
+  });
+
+  /* Akzentlinie */
+  const ruleW = 48;
+  ctx.page.drawRectangle({
+    x: MARGIN + (CONTENT_WIDTH - ruleW) / 2,
+    y: ctx.y + 8,
+    width: ruleW,
+    height: 2.5,
+    color: COLORS.blue,
+  });
+  ctx.y -= 24;
 
   /* Ort */
   if (project.location) {
-    drawParagraph(ctx, project.location, {
-      size: 14,
-      color: COLORS.secondary,
-      spacingAfter: 14,
-    });
+    drawCentered(ctx, project.location, { size: 14, color: COLORS.secondary });
   }
+  ctx.y -= 8;
 
   /* Beschreibung */
   if (project.description) {
-    drawParagraph(ctx, project.description, {
+    drawCenteredParagraph(ctx, project.description, {
       size: 11.5,
       color: COLORS.secondary,
-      spacingAfter: 20,
+      maxWidth: 430,
+      spacingAfter: 28,
     });
+  } else {
+    ctx.y -= 28;
   }
 
-  /* Zusammenfassungs-Kasten */
+  /* Zusammenfassungs-Kasten (zentriert, schlicht) */
   const boxLines = [
     `Projekt-ID: ${project.id}`,
     `Erstellt: ${formatDate(project.createdAt)}`,
@@ -87,19 +126,22 @@ function drawCover(ctx: PdfContext, project: Project, now: string): void {
     `${project.tasks.length} ${project.tasks.length === 1 ? 'Aufgabe' : 'Aufgaben'} · ${(project.documents ?? []).length} ${(project.documents ?? []).length === 1 ? 'Unterlage' : 'Unterlagen'}`,
   ];
   const lineH = 17;
-  const padY = 10;
+  const padY = 12;
+  const boxW = Math.min(440, CONTENT_WIDTH);
+  const boxX = MARGIN + (CONTENT_WIDTH - boxW) / 2;
   const boxH = boxLines.length * lineH + padY * 2;
+  ensureSpace(ctx, boxH + 30);
   const boxBottom = ctx.y - boxH;
 
   ctx.page.drawRectangle({
-    x: MARGIN - 10,
+    x: boxX,
     y: boxBottom,
-    width: CONTENT_WIDTH + 20,
+    width: boxW,
     height: boxH,
     color: COLORS.headerBg,
   });
   ctx.page.drawRectangle({
-    x: MARGIN - 10,
+    x: boxX,
     y: boxBottom,
     width: 3.5,
     height: boxH,
@@ -109,7 +151,7 @@ function drawCover(ctx: PdfContext, project: Project, now: string): void {
   let ly = ctx.y - padY - lineH + 5;
   for (const line of boxLines) {
     ctx.page.drawText(line, {
-      x: MARGIN + 4,
+      x: boxX + 16,
       y: ly,
       size: 10.5,
       font: ctx.font,
@@ -119,9 +161,9 @@ function drawCover(ctx: PdfContext, project: Project, now: string): void {
   }
 
   /* Fußbereich des Deckblatts */
-  ctx.page.drawText(`Exportiert am ${now}`, {
-    x: MARGIN,
-    y: 44,
+  ctx.page.drawText(`Exportiert am ${now}  ·  LDC Planer`, {
+    x: MARGIN + (CONTENT_WIDTH - ctx.font.widthOfTextAtSize(`Exportiert am ${now}  ·  LDC Planer`, 9)) / 2,
+    y: 36,
     size: 9,
     font: ctx.font,
     color: COLORS.tertiary,
@@ -219,19 +261,28 @@ function documentList(
   ctx: PdfContext,
   documents: ProjectDocument[],
   label: string,
+  heading = false,
 ): void {
   if (documents.length === 0) return;
-  ensureSpace(ctx, 18);
-  ctx.page.drawRectangle({
-    x: MARGIN,
-    y: ctx.y - 2,
-    width: CONTENT_WIDTH,
-    height: 16,
-    color: COLORS.headerBg,
-  });
-  drawText(ctx, label, { size: 9.5, font: ctx.bold, color: COLORS.secondary });
+  if (heading) {
+    /* Abschnitts-Überschrift (z. B. „Unterlagen“) */
+    ensureSpace(ctx, 30);
+    drawText(ctx, label, { size: 14, font: ctx.bold });
+    ctx.y -= 8;
+  } else {
+    /* Kleine Unter-Überschrift (z. B. „Dokumente“ einer Aufgabe) */
+    ensureSpace(ctx, 18);
+    ctx.page.drawRectangle({
+      x: MARGIN,
+      y: ctx.y - 2,
+      width: CONTENT_WIDTH,
+      height: 16,
+      color: COLORS.headerBg,
+    });
+    drawText(ctx, label, { size: 9.5, font: ctx.bold, color: COLORS.secondary });
+  }
   for (const doc of documents) documentLine(ctx, doc);
-  ctx.y -= 6;
+  ctx.y -= heading ? 14 : 6;
 }
 
 /* ═════════════ Bilder (bis zu 2 pro Reihe) ═════════════ */
@@ -258,13 +309,13 @@ async function imageBlock(
 
     /* Ein einzelnes (bzw. nur ein erfolgreiches) Bild zentriert zeichnen */
     if (!a || !b) {
-      if (a) drawImage(ctx, a, 6);
-      else if (b) drawImage(ctx, b, 6);
+      if (a) drawImage(ctx, a, 10);
+      else if (b) drawImage(ctx, b, 10);
       continue;
     }
 
     /* Beide Bilder nebeneinander, jeweils mittig in ihrer Hälfte */
-    const rowH = Math.max(a.height, b.height) + 6;
+    const rowH = Math.max(a.height, b.height) + 10;
     ensureSpace(ctx, rowH);
     const ax = MARGIN + (halfW - a.width) / 2;
     const bx = MARGIN + halfW + (halfW - b.width) / 2;
@@ -308,13 +359,13 @@ async function taskSection(ctx: PdfContext, task: Task): Promise<number> {
   const shownName = truncateToWidth(
     ctx.bold,
     task.name,
-    13.5,
+    12.5,
     CONTENT_WIDTH - statusW - 24,
   );
   ctx.page.drawText(shownName, {
     x: MARGIN - 2,
     y: rectBottom + 17,
-    size: 13.5,
+    size: 12.5,
     font: ctx.bold,
     color: COLORS.text,
   });
@@ -376,7 +427,8 @@ async function taskSection(ctx: PdfContext, task: Task): Promise<number> {
   await imageBlock(ctx, 'Nachher-Bilder', task.afterImages);
   documentList(ctx, task.documents, 'Dokumente');
   documentList(ctx, task.afterDocuments, 'Nachher-Dokumente');
-  ctx.y -= 8;
+  /* Klarer Abstand zur nächsten Aufgabe */
+  ctx.y -= 20;
 
   return startPage;
 }
@@ -392,21 +444,21 @@ export async function buildProjectPdf(
     month: '2-digit',
     year: 'numeric',
   });
-  const ctx = await createPdfContext(
-    `Exportiert am ${now} mit LDC Projekt Planer`,
-  );
+  const ctx = await createPdfContext(`Exportiert am ${now} mit LDC Planer`);
 
   /* ── Seite 1: Deckblatt ── */
-  drawCover(ctx, project, now);
+  await drawCover(ctx, project, now);
 
   /* ── Seite 2+: Bericht ── */
   ctx.page = ctx.doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   ctx.y = PAGE_HEIGHT - MARGIN;
   const contentStartPage = ctx.doc.getPageCount(); // 2
 
-  /* Kompakter Berichtskopf */
+  /* ── Abschnitt: Projektinformationen ── */
   ensureSpace(ctx, 90);
-  drawText(ctx, 'Projektbericht', { size: 16, font: ctx.bold });
+  drawText(ctx, 'Projektinformationen', { size: 14, font: ctx.bold });
+  ctx.y -= 4;
+  drawText(ctx, project.name, { size: 13, font: ctx.bold });
   if (project.location) {
     drawText(ctx, project.location, { size: 11, color: COLORS.secondary });
   }
@@ -422,15 +474,17 @@ export async function buildProjectPdf(
     size: 9.5,
     color: COLORS.tertiary,
   });
+  ctx.y -= 10;
   drawHLine(ctx);
 
-  documentList(ctx, project.documents ?? [], 'Unterlagen');
+  /* ── Abschnitt: Unterlagen ── */
+  documentList(ctx, project.documents ?? [], 'Unterlagen', true);
 
-  /* ── Aufgaben ── */
-  ensureSpace(ctx, 24);
-  drawText(ctx, 'Aufgaben', { size: 12, font: ctx.bold });
+  /* ── Abschnitt: Aufgaben ── */
+  ensureSpace(ctx, 34);
+  drawText(ctx, 'Aufgaben', { size: 14, font: ctx.bold });
   /* Abstand zur ersten Aufgabe, damit der Titelblock nichts überdeckt */
-  ctx.y -= 12;
+  ctx.y -= 16;
 
   const tocEntries: TocEntry[] = [
     { prefix: '1.', label: 'Projektinformationen', page: contentStartPage + 1 },
