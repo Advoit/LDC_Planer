@@ -290,9 +290,13 @@ export function drawImage(
 }
 
 /** Ergänzt Fußzeilen (Export-Datum + Seitenzahl) und liefert die PDF-Bytes. */
-export async function finalizePdf(ctx: PdfContext): Promise<Uint8Array> {
+export async function finalizePdf(
+  ctx: PdfContext,
+  opts?: { skipFirstPage?: boolean },
+): Promise<Uint8Array> {
   const pages = ctx.doc.getPages();
   pages.forEach((page, i) => {
+    if (opts?.skipFirstPage && i === 0) return;
     page.drawText(`${ctx.footer}  ·  Seite ${i + 1}`, {
       x: MARGIN,
       y: 28,

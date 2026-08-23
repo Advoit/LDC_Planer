@@ -12,6 +12,9 @@ import {
 } from './ui/export-flow';
 import { showMergeOrOverwriteDialog, runMergeFlow } from './ui/merge-flow';
 import { openProjectDocumentsModal } from './ui/project-documents';
+import { createDropdown } from './ui/dropdown';
+import { buildMobileNav } from './ui/mobile-nav';
+import type { MobileNavGroup } from './ui/mobile-nav';
 import { loadStoredProject, storeProject } from './core/storage';
 import { migrateProject } from './core/migrate';
 import { touchProject } from './domain/project';
@@ -74,6 +77,7 @@ function render(): void {
 
   appEl.appendChild(buildToolbar());
   buildMain();
+  appEl.appendChild(buildMobileNavigation());
 }
 
 function buildToolbar(): HTMLElement {
@@ -107,64 +111,108 @@ function buildToolbar(): HTMLElement {
   brand.appendChild(brandText);
   bar.appendChild(brand);
 
-  /* Aktionen – gruppiert nach Bereich */
+  /* Aktionen – Desktop: Gruppen als Dropdown-Menüs */
   const actions = el('div', { class: 'toolbar-actions' });
 
-  const btn = (
-    label: string,
-    iconName: string,
-    click: () => void,
-    extra: string = '',
-  ) => {
-    const b = el(
-      'button',
-      { class: `toolbar-btn ${extra}`, type: 'button', title: label, 'aria-label': label },
-      [icon(iconName), el('span', { class: 'btn-label' }, [label])],
-    ) as HTMLButtonElement;
-    b.addEventListener('click', click);
-    return b;
-  };
-
-  const group = (label: string, buttons: HTMLButtonElement[]): HTMLElement =>
-    el('div', { class: 'toolbar-group' }, [
-      el('span', { class: 'toolbar-group-label' }, [label]),
-      el('div', { class: 'toolbar-group-buttons' }, buttons),
-    ]);
-
-  /* ── Gruppe: Projektverwaltung ── */
   actions.appendChild(
-    group('Projekt', [
-      btn('Neues Projekt', 'folder-plus', () => void handleNewProject()),
-      btn('Speichern', 'download', () => void handleSave(), !project ? 'disabled' : ''),
-      btn('Laden', 'upload', () => void handleLoad()),
-    ]),
+    createDropdown({
+      label: 'Projekt',
+      icon: 'folder',
+      items: [
+        { label: 'Neues Projekt', icon: 'folder-plus', onClick: () => void handleNewProject() },
+        { label: 'Speichern', icon: 'download', onClick: () => void handleSave(), disabled: !project },
+        { label: 'Laden', icon: 'upload', onClick: () => void handleLoad() },
+      ],
+    }),
   );
 
   if (project) {
-    /* ── Gruppe: Dokumente ── */
     actions.appendChild(
-      group('Dokumente', [
-        btn('Unterlagen', 'paperclip', () => void handleProjectDocuments()),
-        btn('Projekt Export', 'file-text', () => void handleProjectExport()),
-        btn('Material Export', 'clipboard', () => {
-          if (project) void openMaterialExportModal(project);
-        }),
-      ]),
+      createDropdown({
+        label: 'Dokumente',
+        icon: 'paperclip',
+        items: [
+          { label: 'Unterlagen', icon: 'paperclip', onClick: () => void handleProjectDocuments() },
+          { label: 'Projekt Export', icon: 'file-text', onClick: () => void handleProjectExport() },
+          {
+            label: 'Material Export',
+            icon: 'clipboard',
+            onClick: () => {
+              if (project) void openMaterialExportModal(project);
+            },
+          },
+        ],
+      }),
     );
 
-    /* ── Gruppe: Aufgaben ── */
-    const editLabel = editMode ? 'Fertig' : 'Editieren';
-    const editExtra = editMode ? 'active' : '';
     actions.appendChild(
-      group('Aufgaben', [
-        btn('Neue Aufgabe', 'plus', () => void handleNewTask(), 'primary'),
-        btn(editLabel, editMode ? 'check' : 'pencil', () => toggleEditMode(), editExtra),
-      ]),
+      createDropdown({
+        label: 'Aufgaben',
+        icon: 'list',
+        items: [
+          { label: 'Neue Aufgabe', icon: 'plus', onClick: () => void handleNewTask(), kind: 'primary' },
+          {
+            label: editMode ? 'Fertig' : 'Editieren',
+            icon: editMode ? 'check' : 'pencil',
+            onClick: () => toggleEditMode(),
+          },
+        ],
+      }),
     );
   }
 
   bar.appendChild(actions);
   return bar;
+}
+
+/* ── Mobile Bottom-Navbar (nur mobil sichtbar) ── */
+
+function buildMobileNavigation(): HTMLElement {
+  const groups: MobileNavGroup[] = [
+    {
+      label: 'Projekt',
+      icon: 'folder',
+      items: [
+        { label: 'Neues Projekt', icon: 'folder-plus', onClick: () => void handleNewProject() },
+        { label: 'Speichern', icon: 'download', onClick: () => void handleSave(), disabled: !project },
+        { label: 'Laden', icon: 'upload', onClick: () => void handleLoad() },
+      ],
+    },
+  ];
+
+  if (project) {
+    groups.push(
+      {
+        label: 'Dokumente',
+        icon: 'paperclip',
+        items: [
+          { label: 'Unterlagen', icon: 'paperclip', onClick: () => void handleProjectDocuments() },
+          { label: 'Projekt Export', icon: 'file-text', onClick: () => void handleProjectExport() },
+          {
+            label: 'Material Export',
+            icon: 'clipboard',
+            onClick: () => {
+              if (project) void openMaterialExportModal(project);
+            },
+          },
+        ],
+      },
+      {
+        label: 'Aufgaben',
+        icon: 'list',
+        items: [
+          { label: 'Neue Aufgabe', icon: 'plus', onClick: () => void handleNewTask(), primary: true },
+          {
+            label: editMode ? 'Fertig' : 'Editieren',
+            icon: editMode ? 'check' : 'pencil',
+            onClick: () => toggleEditMode(),
+          },
+        ],
+      },
+    );
+  }
+
+  return buildMobileNav(groups);
 }
 
 function buildMain(): void {

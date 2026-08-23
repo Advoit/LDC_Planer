@@ -35,13 +35,12 @@ function materialRows(items: MaterialItem[]): PdfTableRow[] {
 }
 
 function totalRow(items: MaterialItem[]): PdfTableRow[] {
-  const q = items.reduce((s, i) => s + i.quantity, 0);
-  const names = [...new Set(items.map((i) => i.name))].sort();
-  return [
-    {
-      cells: [`Alle Artikel (${names.length})`, String(q), ''],
-    },
-  ];
+  /* Mengen verschiedener Einheiten lassen sich nicht sinnvoll summieren –
+     daher nur die Anzahl der Positionen (Name + Einheit) anzeigen. */
+  const positions = new Set(
+    items.map((i) => `${i.name.trim()}\x00${i.unit.trim()}`),
+  );
+  return [{ cells: [`Alle Artikel (${positions.size})`, '', ''] }];
 }
 
 /** Modus „Nach Aufgaben“: pro Aufgabe ein Abschnitt mit Materialtabelle. */
