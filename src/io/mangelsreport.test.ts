@@ -233,6 +233,52 @@ describe('buildReportSlide (Foto-Kacheln: oben Vorher, unten Nachher)', () => {
     expect(xml).toContain('Bildplatzhalter 1');
     expect(xml).not.toContain('<p:pic>');
   });
+
+  it('schneidet ein breites Bild seitlich symmetrisch zu (srcRect l == r)', () => {
+    const files = unzipSync(getMangelsreportTemplateBytes());
+    const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
+    const wide = [
+      { bytes: new Uint8Array(0), width: 2400, height: 1000, file: 'ppt/media/b1.png' },
+    ];
+    const xml = buildReportSlide(baseSlide, makeTask('T1'), COVER, wide, []);
+
+    const srcRect = xml.match(/<a:srcRect[^/]*\/>/)?.[0] ?? '';
+    const l = Number(srcRect.match(/l="(\d+)"/)?.[1] ?? 0);
+    const r = Number(srcRect.match(/r="(\d+)"/)?.[1] ?? 0);
+    /* l/t/r/b sind Abstände von den Rändern → symmetrischer Zuschnitt */
+    expect(l).toBeGreaterThan(0);
+    expect(r).toBe(l);
+    expect(srcRect).toContain('t="0"');
+    expect(srcRect).toContain('b="0"');
+  });
+
+  it('schneidet ein hohes Bild oben/unten symmetrisch zu (srcRect t == b)', () => {
+    const files = unzipSync(getMangelsreportTemplateBytes());
+    const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
+    const tall = [
+      { bytes: new Uint8Array(0), width: 800, height: 2000, file: 'ppt/media/b1.png' },
+    ];
+    const xml = buildReportSlide(baseSlide, makeTask('T1'), COVER, tall, []);
+
+    const srcRect = xml.match(/<a:srcRect[^/]*\/>/)?.[0] ?? '';
+    const t = Number(srcRect.match(/t="(\d+)"/)?.[1] ?? 0);
+    const b = Number(srcRect.match(/b="(\d+)"/)?.[1] ?? 0);
+    expect(t).toBeGreaterThan(0);
+    expect(b).toBe(t);
+    expect(srcRect).toContain('l="0"');
+    expect(srcRect).toContain('r="0"');
+  });
+
+  it('nutzt bei passendem Seitenverhältnis keinen Zuschnitt', () => {
+    const files = unzipSync(getMangelsreportTemplateBytes());
+    const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
+    /* Exakt das Seitenverhältnis der Vorher-Kachel (3861537 × 2424243) */
+    const fit = [
+      { bytes: new Uint8Array(0), width: 3861537, height: 2424243, file: 'ppt/media/b1.png' },
+    ];
+    const xml = buildReportSlide(baseSlide, makeTask('T1'), COVER, fit, []);
+    expect(xml).toContain('<a:srcRect l="0" t="0" r="0" b="0"/>');
+  });
 });
 
 describe('buildReportSlide (mehrzeiliger Text, PowerPoint-kompatibel)', () => {

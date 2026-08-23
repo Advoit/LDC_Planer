@@ -494,6 +494,10 @@ function buildPicture(
 /**
  * Berechnet den Bildausschnitt (srcRect) für eine „Cover“-Darstellung:
  * Das Bild füllt den Rahmen ohne Verzerrung, überschüssige Bereiche werden abgeschnitten.
+ *
+ * Achtung: l/t/r/b sind Abstände von der jeweiligen Bildkante („wie viel wird
+ * abgeschnitten“), NICHT Koordinaten der rechten Kante. Bei einem seitlichen
+ * Zuschnitt ist daher r === l, bei einem oberen/unteren b === t.
  */
 function coverCrop(
   imgW: number,
@@ -509,13 +513,13 @@ function coverCrop(
     /* Bild ist breiter → seitlich abschneiden */
     const keep = frameAspect / imgAspect;
     const crop = Math.round(((1 - keep) / 2) * k);
-    return { l: crop, t: 0, r: k - crop, b: 0 };
+    return { l: crop, t: 0, r: crop, b: 0 };
   }
   if (frameAspect > imgAspect) {
     /* Bild ist höher → oben/unten abschneiden */
     const keep = imgAspect / frameAspect;
     const crop = Math.round(((1 - keep) / 2) * k);
-    return { l: 0, t: crop, r: 0, b: k - crop };
+    return { l: 0, t: crop, r: 0, b: crop };
   }
   return { l: 0, t: 0, r: 0, b: 0 };
 }
