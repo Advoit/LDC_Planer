@@ -82,6 +82,27 @@ function expectWellFormed(xml: string): void {
   expect(stack).toEqual([]);
 }
 
+/** Liefert den Inhalt aller <a:r>-Runs (für Schema-Prüfungen auf Run-Ebene). */
+function getRuns(xml: string): string[] {
+  return [...xml.matchAll(/<a:r>((?:(?!<\/a:r>)[\s\S])*?)<\/a:r>/g)].map(
+    (m) => m[1],
+  );
+}
+
+/**
+ * DrawingML-Schema: Ein <a:r>-Run darf nur EIN <a:t> enthalten, <a:br/>
+ * gehört auf Absatzebene zwischen die Runs – sonst repariert PowerPoint.
+ */
+function expectValidRuns(xml: string): void {
+  const runs = getRuns(xml);
+  expect(runs.length).toBeGreaterThan(0);
+  for (const run of runs) {
+    const tCount = (run.match(/<a:t>/g) ?? []).length;
+    expect(tCount).toBe(1);
+    expect(run).not.toContain('<a:br/>');
+  }
+}
+
 describe('reportImages', () => {
   it('nimmt Vorher- und Nachher-Bilder auf (Vorher zuerst, max. 8)', () => {
     const images = Array.from({ length: 3 }, (_, i) => ({ id: `v${i}`, dataUrl: '', hash: 'h' }));
@@ -195,6 +216,43 @@ describe('buildReportSlide (Foto-Raster)', () => {
   });
 });
 
+describe('buildReportSlide (mehrzeiliger Text, PowerPoint-kompatibel)', () => {
+  it('erzeugt bei mehrzeiligem Text gültige Runs (a:br als Geschwister, ein a:t pro Run)', () => {
+    const files = unzipSync(getMangelsreportTemplateBytes());
+    const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
+    const task = makeTask('T1', {
+      pruefung: 'Sichtprüfung',
+      fehlerbeschreibung: 'Zeile 1\nZeile 2 mit &amp;',
+      hintText: 'Hinweis A\nHinweis B',
+    });
+    const xml = buildReportSlide(baseSlide, task, COVER, []);
+
+    expectWellFormed(xml);
+    /* Schema-konform: ein a:t pro Run, kein a:br innerhalb eines Runs */
+    expectValidRuns(xml);
+    /* Umbrüche stehen auf Absatzebene zwischen den Runs */
+    expect(xml).toContain('</a:r><a:br/><a:r>');
+    expect(xml).toContain('<a:t>Zeile 1</a:t>');
+    expect(xml).toContain('<a:t>Zeile 2 mit &amp;amp;</a:t>');
+    expect(xml).toContain('<a:t>Hinweis A</a:t>');
+    expect(xml).toContain('<a:t>Hinweis B</a:t>');
+  });
+
+  it('lässt einzeiligen Text unverändert (ein Run, ein a:t)', () => {
+    const files = unzipSync(getMangelsreportTemplateBytes());
+    const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
+    const xml = buildReportSlide(
+      baseSlide,
+      makeTask('T1', { fehlerbeschreibung: 'Einzeilig' }),
+      COVER,
+      [],
+    );
+    expect(xml).toContain('<a:t>Einzeilig</a:t>');
+    expect(xml).not.toContain('<a:br/>');
+    expectWellFormed(xml);
+  });
+});
+
 describe('buildMangelsreportPptx', () => {
   it('erzeugt Deckblatt + Reportseiten (nach Position sortiert, nur Mängel)', async () => {
     const project = makeProject([
@@ -220,6 +278,8 @@ describe('buildMangelsreportPptx', () => {
     expect(files['ppt/slides/slide3.xml']).toBeDefined();
     expect(files['ppt/slides/slide4.xml']).toBeDefined();
     expect(files['ppt/slides/slide5.xml']).toBeUndefined();
+    /* Die ungefüllte Musterseite der Vorlage gehört nicht in den Export */
+    expect(files['ppt/slides/slide2.xml']).toBeUndefined();
 
     /* Sortierung nach Position: T2 (2) vor T10 (10) */
     /* Generierte XML-Dateien sind wohlgeformt */
@@ -248,14 +308,17 @@ describe('buildMangelsreportPptx', () => {
     /* Materialzeilen angehängt */
     expect(slide3).toContain('• Farbe: 2 Eigen');
 
-    /* Präsentation registriert alle Folien */
+    /* Präsentation registriert alle Folien (1 Deckblatt + 2 Reportseiten) */
     const presentation = new TextDecoder().decode(files['ppt/presentation.xml']);
-    expect(presentation.match(/<p:sldId /g)).toHaveLength(4);
+    expect(presentation.match(/<p:sldId /g)).toHaveLength(3);
     const presRels = new TextDecoder().decode(files['ppt/_rels/presentation.xml.rels']);
     expect(presRels).toContain('slides/slide3.xml');
     expect(presRels).toContain('slides/slide4.xml');
     const contentTypes = new TextDecoder().decode(files['[Content_Types].xml']);
     expect(contentTypes).toContain('/ppt/slides/slide4.xml');
+
+    /* Mehrzeilige Felder: kein a:br innerhalb eines Runs */
+    expectWellFormed(new TextDecoder().decode(files['ppt/slides/slide3.xml']));
   });
 
   it('behält nur das Deckblatt, wenn keine Mängel-Aufgaben existieren', async () => {
@@ -263,8 +326,27 @@ describe('buildMangelsreportPptx', () => {
     const bytes = await buildMangelsreportPptx(project, { cover: COVER });
     const files = unzipSync(bytes);
     expect(files['ppt/slides/slide3.xml']).toBeUndefined();
+    expect(files['ppt/slides/slide2.xml']).toBeUndefined();
     const presentation = new TextDecoder().decode(files['ppt/presentation.xml']);
-    expect(presentation.match(/<p:sldId /g)).toHaveLength(2);
+    expect(presentation.match(/<p:sldId /g)).toHaveLength(1);
+  });
+
+  it('erzeugt keine a:br-innerhalb-a:r-Verstöße im kompletten Export (mehrzeilige Felder)', async () => {
+    const project = makeProject([
+      makeTask('T1', {
+        position: '1',
+        fehlerbeschreibung: 'Erste Zeile\nZweite Zeile mit <Tag> & mehr',
+        hintText: 'Hinweis 1\nHinweis 2',
+      }),
+      makeTask('T2', { position: '2', fehlerbeschreibung: 'Einzeilig' }),
+    ]);
+    const bytes = await buildMangelsreportPptx(project, { cover: COVER });
+    const files = unzipSync(bytes);
+    for (let i = 3; i <= 4; i++) {
+      const xml = new TextDecoder().decode(files[`ppt/slides/slide${i}.xml`]);
+      expectWellFormed(xml);
+      expectValidRuns(xml);
+    }
   });
 });
 

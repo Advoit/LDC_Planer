@@ -93,13 +93,17 @@ export async function buildMangelsreportPptx(
     .filter((t) => (t.typ ?? 'maengel') === 'maengel')
     .sort((a, b) => comparePositions(a.position, b.position));
 
+  /* Die Musterseite (Folie 2 der Vorlage) ist nur die Basis für die
+     Reportseiten – sie gehört nicht in den Export und wird entfernt. */
   const baseSlide = decode('ppt/slides/slide2.xml');
+  removeTemplateSampleSlide(files);
+
   let contentTypes = decode('[Content_Types].xml');
   let presentation = decode('ppt/presentation.xml');
   let presRels = decode('ppt/_rels/presentation.xml.rels');
   let appXml = decode('docProps/app.xml');
 
-  let slideNo = 3; // slide1 + slide2 sind in der Vorlage vorhanden
+  let slideNo = 3; // slide1 ist das Deckblatt, Reportseiten ab slide3
   let relId = 100; // freie Relationship-IDs (Vorlage nutzt rId1–rId12)
   let sldId = 1000; // freie Folien-IDs
   let mediaNo = 3; // Vorlage hat bereits media1.png + media2.png
@@ -144,16 +148,59 @@ export async function buildMangelsreportPptx(
   files['ppt/_rels/presentation.xml.rels'] = strToU8(presRels);
 
   /* Seitenzahl in den Dokument-Metadaten aktualisieren */
-  if (maengel.length > 0) {
-    appXml = appXml.replace(
-      /<Slides>\d+<\/Slides>/,
-      `<Slides>${maengel.length + 1}</Slides>`,
-    );
-    files['docProps/app.xml'] = strToU8(appXml);
-  }
+  appXml = appXml.replace(
+    /<Slides>\d+<\/Slides>/,
+    `<Slides>${maengel.length + 1}</Slides>`,
+  );
+  files['docProps/app.xml'] = strToU8(appXml);
 
   /* slice() liefert eine eigene Kopie (typsicher Uint8Array) */
   return zipSync(files, { level: 6 }).slice();
+}
+
+/**
+ * Entfernt die ungefüllte Musterseite (slide2.xml) der Vorlage aus dem Export:
+ * Die Reportseiten werden aus ihr abgeleitet, sie selbst darf nicht in der
+ * Präsentation erscheinen. Entfernt werden die Folie, ihre Relationships,
+ * der Eintrag in der sldIdLst, das Präsentations-Relationship und der
+ * Content-Type-Override.
+ */
+function removeTemplateSampleSlide(files: Record<string, Uint8Array>): void {
+  const decode = (path: string): string =>
+    new TextDecoder().decode(files[path]);
+
+  /* rId der Musterseite in den Präsentations-Relationships finden */
+  let presRels = decode('ppt/_rels/presentation.xml.rels');
+  const relMatch = presRels.match(
+    /<Relationship[^>]*Id="(rId\d+)"[^>]*Target="slides\/slide2\.xml"[^>]*\/>/,
+  );
+  if (!relMatch) return;
+  const rid = relMatch[1];
+  presRels = presRels.replace(relMatch[0], '');
+  files['ppt/_rels/presentation.xml.rels'] = strToU8(presRels);
+
+  /* sldId der Musterseite aus der sldIdLst entfernen */
+  let presentation = decode('ppt/presentation.xml');
+  const sldIdMatch = presentation.match(
+    new RegExp(`<p:sldId[^>]*r:id="${rid}"[^>]*/>`),
+  );
+  if (sldIdMatch) {
+    presentation = presentation.replace(sldIdMatch[0], '');
+    files['ppt/presentation.xml'] = strToU8(presentation);
+  }
+
+  /* Content-Type-Override für die Musterseite entfernen */
+  const ct = decode('[Content_Types].xml');
+  const ctMatch = ct.match(
+    /<Override PartName="\/ppt\/slides\/slide2\.xml"[^>]*\/>/,
+  );
+  if (ctMatch) {
+    files['[Content_Types].xml'] = strToU8(ct.replace(ctMatch[0], ''));
+  }
+
+  /* Folie und ihre Relationships entfernen */
+  delete files['ppt/slides/slide2.xml'];
+  delete files['ppt/slides/_rels/slide2.xml.rels'];
 }
 
 /** Dateiname für den Mängelreport (Projektname, sicher bereinigt). */
@@ -451,12 +498,21 @@ function textRun(value: string): string {
   return `<a:t>${escapeXml(value)}</a:t>`;
 }
 
-/** Text mit Zeilenumbrüchen als mehrere Runs mit <a:br/> (mehrzeilige Felder). */
+/**
+ * Text mit Zeilenumbrüchen schema-konform aufbereiten: Ein DrawingML-Run
+ * (<a:r>) darf nur EIN <a:t> enthalten; Zeilenumbrüche gehören als <a:br/>
+ * auf Absatzebene zwischen die Runs. Die erste Zeile bleibt im bestehenden
+ * Run, jede weitere Zeile schließt den Run ab und öffnet einen neuen
+ * (<a:br/> dazwischen). So bleibt das XML gültig und PowerPoint repariert
+ * die Datei nicht.
+ */
 function textWithBreaks(value: string): string {
-  return value
-    .split('\n')
-    .map((line) => `<a:t>${escapeXml(line)}</a:t>`)
-    .join('<a:br/>');
+  const lines = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  let out = `<a:t>${escapeXml(lines[0])}</a:t>`;
+  for (let i = 1; i < lines.length; i++) {
+    out += `</a:r><a:br/><a:r><a:rPr lang="de-DE" dirty="0"/><a:t>${escapeXml(lines[i])}</a:t>`;
+  }
+  return out;
 }
 
 function escapeXml(value: string): string {
