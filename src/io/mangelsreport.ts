@@ -27,11 +27,16 @@ export interface MangelsreportOptions {
 }
 
 /**
- * Sammelt die Fotos einer Aufgabe für den Report: zuerst Vorher-, dann
- * Nachher-Bilder – begrenzt auf das Fassungsvermögen einer Reportseite.
+ * Sammelt die Fotos einer Aufgabe für den Report – getrennt nach Vorher- und
+ * Nachher-Bildern (begrenzt auf die Fassungsvermögen der jeweiligen Kachel):
+ * Vorher-Bilder kommen in die obere, Nachher-Bilder in die untere Foto-Kachel.
  */
-export function reportImages(task: Task): TaskImage[] {
-  return [...task.images, ...task.afterImages].slice(0, MAX_REPORT_IMAGES);
+export function reportBeforeImages(task: Task): TaskImage[] {
+  return task.images.slice(0, MAX_IMAGES_PER_TILE);
+}
+
+export function reportAfterImages(task: Task): TaskImage[] {
+  return task.afterImages.slice(0, MAX_IMAGES_PER_TILE);
 }
 
 const REL_SLIDE_LAYOUT =
@@ -43,13 +48,15 @@ const REL_IMAGE =
 const CT_SLIDE =
   'application/vnd.openxmlformats-officedocument.presentationml.slide+xml';
 
-/* Foto-Fläche aus der Vorlage (slideLayout2): die gesamte linke Spalte.
-   Bilder werden darin als Raster angeordnet (1 groß, 2 nebeneinander,
-   bis zu 8 als 2-Spalten-Raster) – ohne dass mehr Platz genutzt wird. */
-export const PHOTO_CANVAS = { x: 634263, y: 133350, w: 3861537, h: 4938843 };
+/* Die beiden Foto-Kacheln aus der Vorlage (slideLayout2): oben „Vorher“,
+   unten „Nachher“. In jeder Kachel werden die Fotos als 2-Spalten-Raster
+   angeordnet (1 groß, 2 nebeneinander, bis zu 4 als 2×2-Quadrat) – ohne dass
+   mehr Platz genutzt wird und ohne die mittlere Textzeile zu überdecken. */
+export const VORHER_TILE = { x: 634263, y: 133350, w: 3861537, h: 2424243 };
+export const NACHHER_TILE = { x: 634263, y: 2633793, w: 3861537, h: 2438400 };
 
-/** Maximale Anzahl Fotos pro Reportseite (2-Spalten-Raster, 4 Reihen). */
-const MAX_REPORT_IMAGES = 8;
+/** Maximale Anzahl Fotos pro Kachel (2-Spalten-Raster, 2 Reihen). */
+const MAX_IMAGES_PER_TILE = 4;
 
 interface PptxImage {
   bytes: Uint8Array;
@@ -109,17 +116,29 @@ export async function buildMangelsreportPptx(
   let mediaNo = 3; // Vorlage hat bereits media1.png + media2.png
 
   for (const task of maengel) {
+    /* Vorher- und Nachher-Fotos getrennt aufbereiten (obere/untere Kachel) */
     const media: SlideMedia[] = [];
-    for (const img of reportImages(task)) {
+    const mediaBefore: SlideMedia[] = [];
+    const mediaAfter: SlideMedia[] = [];
+    for (const img of reportBeforeImages(task)) {
       const png = await imageToPng(img.dataUrl);
       const file = `ppt/media/media${mediaNo}.png`;
       files[file] = png.bytes.slice(); // slice(): typsichere eigene Kopie
       media.push({ ...png, file });
+      mediaBefore.push({ ...png, file });
+      mediaNo++;
+    }
+    for (const img of reportAfterImages(task)) {
+      const png = await imageToPng(img.dataUrl);
+      const file = `ppt/media/media${mediaNo}.png`;
+      files[file] = png.bytes.slice();
+      media.push({ ...png, file });
+      mediaAfter.push({ ...png, file });
       mediaNo++;
     }
 
     files[`ppt/slides/slide${slideNo}.xml`] = strToU8(
-      buildReportSlide(baseSlide, task, opts.cover, media),
+      buildReportSlide(baseSlide, task, opts.cover, mediaBefore, mediaAfter),
     );
     files[`ppt/slides/_rels/slide${slideNo}.xml.rels`] = strToU8(
       buildSlideRels(media),
@@ -241,15 +260,17 @@ function buildCoverSlide(template: string, cover: MangelsreportCover): string {
 
 /**
  * Baut eine Reportseite aus der Vorlagen-Folie.
- * Die Fotos werden als Raster in der Foto-Fläche platziert (2 Spalten):
- * 1 Bild = ganze Fläche, 2 Bilder = nebeneinander, 3 = 2 oben + 1 unten breit,
- * 4 = 2×2-Quadrat, mehr = weitere Zeilen (letzte ungerade Zelle volle Breite).
+ * Die Fotos werden in den beiden Foto-Kacheln der Vorlage platziert:
+ * obere Kachel = Vorher-Bilder, untere Kachel = Nachher-Bilder. In jeder
+ * Kachel gilt ein 2-Spalten-Raster: 1 Bild = ganze Kachel, 2 = nebeneinander,
+ * 3 = 2 oben + 1 unten breit, 4 = 2×2-Quadrat.
  */
 export function buildReportSlide(
   template: string,
   task: Task,
   cover: MangelsreportCover,
-  media: SlideMedia[],
+  beforeMedia: SlideMedia[],
+  afterMedia: SlideMedia[],
 ): string {
   let xml = template;
 
@@ -312,12 +333,17 @@ export function buildReportSlide(
     );
   }
 
-  /* Fotos: leere Bildplatzhalter entfernen und als Raster in die Foto-Fläche setzen.
-     Ohne Fotos bleiben die Platzhalter (wie in der Vorlage) sichtbar. */
-  if (media.length > 0) {
-    xml = removePlaceholder(xml, 'Bildplatzhalter 3');
-    xml = removePlaceholder(xml, 'Bildplatzhalter 1');
-    const pics = buildPhotoPics(media);
+  /* Fotos: Platzhalter der jeweiligen Kachel entfernen und Fotos in die
+     Kacheln setzen (oben Vorher, unten Nachher). Ohne Fotos bleiben die
+     Platzhalter (wie in der Vorlage) sichtbar. */
+  if (beforeMedia.length > 0 || afterMedia.length > 0) {
+    if (beforeMedia.length > 0) {
+      xml = removePlaceholder(xml, 'Bildplatzhalter 3'); // obere Kachel (Vorher)
+    }
+    if (afterMedia.length > 0) {
+      xml = removePlaceholder(xml, 'Bildplatzhalter 1'); // untere Kachel (Nachher)
+    }
+    const pics = buildPhotoPics(beforeMedia, afterMedia);
     xml = xml.replace('</p:spTree>', pics + '</p:spTree>');
   }
 
@@ -371,27 +397,44 @@ function removePlaceholder(xml: string, placeholderName: string): string {
   return xml.slice(0, start) + xml.slice(end + '</p:sp>'.length);
 }
 
-/** Baut die <p:pic>-Elemente für alle Fotos einer Reportseite (Raster). */
-function buildPhotoPics(media: SlideMedia[]): string {
-  const imgs = media.slice(0, MAX_REPORT_IMAGES);
-  const cells = photoGrid(imgs.length);
-  return imgs
-    .map((img, i) =>
-      buildPicture(img, cells[i], 100 + i, 2 + i, `Bild ${i + 1}`),
-    )
-    .join('');
+/** Baut die <p:pic>-Elemente für alle Fotos einer Reportseite (Kacheln). */
+function buildPhotoPics(
+  beforeMedia: SlideMedia[],
+  afterMedia: SlideMedia[],
+): string {
+  const before = beforeMedia.slice(0, MAX_IMAGES_PER_TILE);
+  const after = afterMedia.slice(0, MAX_IMAGES_PER_TILE);
+
+  let pics = '';
+  let rid = 2; // rId1 ist das Layout – Fotos ab rId2
+  let id = 100;
+
+  /* Obere Kachel: Vorher-Bilder */
+  const beforeCells = photoGrid(before.length, VORHER_TILE);
+  before.forEach((img, i) => {
+    pics += buildPicture(img, beforeCells[i], id++, rid++, `Vorher ${i + 1}`);
+  });
+
+  /* Untere Kachel: Nachher-Bilder */
+  const afterCells = photoGrid(after.length, NACHHER_TILE);
+  after.forEach((img, i) => {
+    pics += buildPicture(img, afterCells[i], id++, rid++, `Nachher ${i + 1}`);
+  });
+
+  return pics;
 }
 
 /**
- * Berechnet die Raster-Zellen für n Bilder in der Foto-Fläche (2 Spalten,
+ * Berechnet die Raster-Zellen für n Bilder in einer Kachel (2 Spalten,
  * die letzte ungerade Zelle bekommt die volle Breite):
- * 1 → ganze Fläche · 2 → nebeneinander · 3 → 2 oben, 1 unten breit ·
- * 4 → 2×2-Quadrat · mehr → weitere Zeilen. Die Fläche bleibt immer gleich groß.
+ * 1 → ganze Kachel · 2 → nebeneinander · 3 → 2 oben, 1 unten breit ·
+ * 4 → 2×2-Quadrat. Die Kachel bleibt immer gleich groß.
  */
 export function photoGrid(
   imageCount: number,
+  tile: { x: number; y: number; w: number; h: number } = VORHER_TILE,
 ): { x: number; y: number; w: number; h: number }[] {
-  const c = PHOTO_CANVAS;
+  const c = tile;
   if (imageCount <= 0) return [];
   if (imageCount === 1) return [{ ...c }];
 

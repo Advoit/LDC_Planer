@@ -6,7 +6,10 @@ import {
   getMangelsreportTemplateBytes,
   mangelsreportFileName,
   photoGrid,
-  reportImages,
+  reportBeforeImages,
+  reportAfterImages,
+  VORHER_TILE,
+  NACHHER_TILE,
 } from './mangelsreport';
 import type { MangelsreportCover } from './mangelsreport';
 import type { Project, Task } from '../domain/types';
@@ -103,37 +106,37 @@ function expectValidRuns(xml: string): void {
   }
 }
 
-describe('reportImages', () => {
-  it('nimmt Vorher- und Nachher-Bilder auf (Vorher zuerst, max. 8)', () => {
+describe('reportBeforeImages / reportAfterImages', () => {
+  it('trennt Vorher- und Nachher-Bilder (max. 4 pro Kachel)', () => {
     const images = Array.from({ length: 3 }, (_, i) => ({ id: `v${i}`, dataUrl: '', hash: 'h' }));
     const afterImages = Array.from({ length: 7 }, (_, i) => ({ id: `n${i}`, dataUrl: '', hash: 'h' }));
     const task = makeTask('T1', { images, afterImages });
-    const photos = reportImages(task);
-    expect(photos).toHaveLength(8);
-    expect(photos[0].id).toBe('v0');
-    expect(photos[3].id).toBe('n0');
+    expect(reportBeforeImages(task).map((p) => p.id)).toEqual(['v0', 'v1', 'v2']);
+    expect(reportAfterImages(task).map((p) => p.id)).toEqual(['n0', 'n1', 'n2', 'n3']);
   });
 
-  it('liefert leere Liste, wenn keine Bilder vorhanden sind', () => {
-    expect(reportImages(makeTask('T1'))).toEqual([]);
+  it('liefert leere Listen, wenn keine Bilder vorhanden sind', () => {
+    const task = makeTask('T1');
+    expect(reportBeforeImages(task)).toEqual([]);
+    expect(reportAfterImages(task)).toEqual([]);
   });
 });
 
 describe('photoGrid', () => {
-  it('1 Bild = ganze Foto-Fläche', () => {
-    expect(photoGrid(1)).toEqual([{ x: 634263, y: 133350, w: 3861537, h: 4938843 }]);
-    expect(photoGrid(0)).toEqual([]);
+  it('1 Bild = ganze Vorher-Kachel', () => {
+    expect(photoGrid(1, VORHER_TILE)).toEqual([{ x: 634263, y: 133350, w: 3861537, h: 2424243 }]);
+    expect(photoGrid(0, VORHER_TILE)).toEqual([]);
   });
 
-  it('2 Bilder = nebeneinander (halbe Breite, volle Höhe)', () => {
-    const cells = photoGrid(2);
+  it('2 Bilder = nebeneinander (halbe Breite, volle Kachelhöhe)', () => {
+    const cells = photoGrid(2, VORHER_TILE);
     expect(cells).toHaveLength(2);
-    expect(cells[0]).toEqual({ x: 634263, y: 133350, w: 1930769, h: 4938843 });
-    expect(cells[1]).toEqual({ x: 2565032, y: 133350, w: 1930769, h: 4938843 });
+    expect(cells[0]).toEqual({ x: 634263, y: 133350, w: 1930769, h: 2424243 });
+    expect(cells[1]).toEqual({ x: 2565032, y: 133350, w: 1930769, h: 2424243 });
   });
 
-  it('4 Bilder = 2×2-Quadrat auf der gleichen Fläche', () => {
-    const cells = photoGrid(4);
+  it('4 Bilder = 2×2-Quadrat in der Kachel', () => {
+    const cells = photoGrid(4, VORHER_TILE);
     expect(cells).toHaveLength(4);
     expect(new Set(cells.map((c) => c.x)).size).toBe(2);
     expect(new Set(cells.map((c) => c.y)).size).toBe(2);
@@ -141,78 +144,94 @@ describe('photoGrid', () => {
   });
 
   it('3 Bilder = 2 oben nebeneinander, 1 unten über die volle Breite', () => {
-    const cells = photoGrid(3);
+    const cells = photoGrid(3, VORHER_TILE);
     expect(cells).toHaveLength(3);
-    expect(cells[2]).toEqual({ x: 634263, y: 2602772, w: 3861537, h: 2469422 });
+    expect(cells[2]).toEqual({ x: 634263, y: 1345472, w: 3861537, h: 1212122 });
   });
 
-  it('5 Bilder = 3 Reihen, letzte Zelle über die volle Breite', () => {
-    const cells = photoGrid(5);
-    expect(cells).toHaveLength(5);
-    expect(new Set(cells.map((c) => c.y)).size).toBe(3);
-    expect(cells[4]).toEqual({ x: 634263, y: 3425912, w: 3861537, h: 1646281 });
-  });
-
-  it('6 Bilder = 3 Reihen à 2 Spalten', () => {
-    const cells = photoGrid(6);
-    expect(cells).toHaveLength(6);
-    for (const c of cells) expect(c.w).toBe(1930769);
-    expect(new Set(cells.map((c) => c.y)).size).toBe(3);
+  it('Nachher-Kachel liegt unterhalb der Vorher-Kachel (getrennte Bereiche)', () => {
+    const before = photoGrid(1, VORHER_TILE);
+    const after = photoGrid(1, NACHHER_TILE);
+    expect(after[0]).toEqual({ x: 634263, y: 2633793, w: 3861537, h: 2438400 });
+    /* Keine Überlappung mit der Vorher-Kachel */
+    expect(before[0].y + before[0].h).toBeLessThanOrEqual(after[0].y);
   });
 });
 
-describe('buildReportSlide (Foto-Raster)', () => {
-  it('platziert 2 Bilder nebeneinander und entfernt die leeren Platzhalter', () => {
+describe('buildReportSlide (Foto-Kacheln: oben Vorher, unten Nachher)', () => {
+  const media = (n: number, prefix: string) =>
+    Array.from({ length: n }, (_, i) => ({
+      bytes: new Uint8Array(0),
+      width: 800,
+      height: 600,
+      file: `ppt/media/${prefix}${i + 1}.png`,
+    }));
+
+  it('platziert 2 Vorher-Bilder nebeneinander in der oberen Kachel', () => {
     const files = unzipSync(getMangelsreportTemplateBytes());
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
-    const media = [
-      { bytes: new Uint8Array(0), width: 800, height: 600, file: 'ppt/media/media9.png' },
-      { bytes: new Uint8Array(0), width: 800, height: 600, file: 'ppt/media/media10.png' },
-    ];
-    const xml = buildReportSlide(baseSlide, makeTask('T1'), COVER, media);
+    const xml = buildReportSlide(baseSlide, makeTask('T1'), COVER, media(2, 'b'), []);
 
     const pics = xml.match(/<p:pic>[\s\S]*?<\/p:pic>/g) ?? [];
     expect(pics).toHaveLength(2);
-    /* Nebeneinander: gleiche y/h, linke und rechte Hälfte */
+    /* Nebeneinander in der oberen Kachel: gleiche y/h, linke/rechte Hälfte */
     expect(xml).toContain('<a:off x="634263" y="133350"/>');
     expect(xml).toContain('<a:off x="2565032" y="133350"/>');
-    expect(xml).toContain('<a:ext cx="1930769" cy="4938843"/>');
-    /* Die leeren Bildplatzhalter der Vorlage sind entfernt */
+    expect(xml).toContain('<a:ext cx="1930769" cy="2424243"/>');
+    /* Nur die obere Kachel (Vorher) wird entfernt, die untere bleibt */
+    expect(xml).not.toContain('Bildplatzhalter 3');
+    expect(xml).toContain('Bildplatzhalter 1');
+    expectWellFormed(xml);
+  });
+
+  it('platziert Vorher oben und Nachher unten in getrennten Kacheln', () => {
+    const files = unzipSync(getMangelsreportTemplateBytes());
+    const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
+    const xml = buildReportSlide(
+      baseSlide,
+      makeTask('T1'),
+      COVER,
+      media(2, 'b'),
+      media(2, 'n'),
+    );
+
+    const pics = xml.match(/<p:pic>[\s\S]*?<\/p:pic>/g) ?? [];
+    expect(pics).toHaveLength(4);
+    /* Vorher in der oberen Kachel (y=133350) … */
+    expect(xml).toContain('<a:off x="634263" y="133350"/>');
+    expect(xml).toContain('<a:ext cx="1930769" cy="2424243"/>');
+    /* … Nachher in der unteren Kachel (y=2633793) */
+    expect(xml).toContain('<a:off x="634263" y="2633793"/>');
+    expect(xml).toContain('<a:ext cx="1930769" cy="2438400"/>');
+    /* Beide leeren Platzhalter sind entfernt */
     expect(xml).not.toContain('Bildplatzhalter 3');
     expect(xml).not.toContain('Bildplatzhalter 1');
     expectWellFormed(xml);
   });
 
-  it('platziert 4 Bilder als 2×2-Quadrat', () => {
+  it('platziert 4 Nachher-Bilder als 2×2-Quadrat in der unteren Kachel', () => {
     const files = unzipSync(getMangelsreportTemplateBytes());
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
-    const media = Array.from({ length: 4 }, (_, i) => ({
-      bytes: new Uint8Array(0),
-      width: 800,
-      height: 600,
-      file: `ppt/media/media${20 + i}.png`,
-    }));
-    const xml = buildReportSlide(baseSlide, makeTask('T1'), COVER, media);
+    const xml = buildReportSlide(baseSlide, makeTask('T1'), COVER, [], media(4, 'n'));
 
     const pics = xml.match(/<p:pic>[\s\S]*?<\/p:pic>/g) ?? [];
     expect(pics).toHaveLength(4);
+    /* Alle Foto-Zellen liegen in der unteren Kachel (y >= 2633793) */
+    const picOffs = pics
+      .join('')
+      .matchAll(/<a:off x="\d+" y="(\d+)"\/>/g);
+    const picYs = [...picOffs].map((m) => Number(m[1]));
+    for (const y of picYs) expect(y).toBeGreaterThanOrEqual(2633793);
     expectWellFormed(xml);
   });
 
-  it('platziert 6 Bilder in 3 Reihen', () => {
+  it('behält ohne Fotos die leeren Platzhalter der Vorlage', () => {
     const files = unzipSync(getMangelsreportTemplateBytes());
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
-    const media = Array.from({ length: 6 }, (_, i) => ({
-      bytes: new Uint8Array(0),
-      width: 800,
-      height: 600,
-      file: `ppt/media/media${30 + i}.png`,
-    }));
-    const xml = buildReportSlide(baseSlide, makeTask('T1'), COVER, media);
-
-    const pics = xml.match(/<p:pic>[\s\S]*?<\/p:pic>/g) ?? [];
-    expect(pics).toHaveLength(6);
-    expectWellFormed(xml);
+    const xml = buildReportSlide(baseSlide, makeTask('T1'), COVER, [], []);
+    expect(xml).toContain('Bildplatzhalter 3');
+    expect(xml).toContain('Bildplatzhalter 1');
+    expect(xml).not.toContain('<p:pic>');
   });
 });
 
@@ -225,7 +244,7 @@ describe('buildReportSlide (mehrzeiliger Text, PowerPoint-kompatibel)', () => {
       fehlerbeschreibung: 'Zeile 1\nZeile 2 mit &amp;',
       hintText: 'Hinweis A\nHinweis B',
     });
-    const xml = buildReportSlide(baseSlide, task, COVER, []);
+    const xml = buildReportSlide(baseSlide, task, COVER, [], []);
 
     expectWellFormed(xml);
     /* Schema-konform: ein a:t pro Run, kein a:br innerhalb eines Runs */
@@ -245,6 +264,7 @@ describe('buildReportSlide (mehrzeiliger Text, PowerPoint-kompatibel)', () => {
       baseSlide,
       makeTask('T1', { fehlerbeschreibung: 'Einzeilig' }),
       COVER,
+      [],
       [],
     );
     expect(xml).toContain('<a:t>Einzeilig</a:t>');
