@@ -1,7 +1,15 @@
 /* ── Aufgaben-Domain: Erzeugen, Validieren, Statuswechsel ── */
 
 import { randomId } from '../core/id';
-import type { MaterialItem, ProjectDocument, Task, TaskImage, TaskStatus } from './types';
+import { MANGEL_ARTEN } from './types';
+import type {
+  MaterialItem,
+  ProjectDocument,
+  Task,
+  TaskImage,
+  TaskStatus,
+  TaskTyp,
+} from './types';
 
 export interface NewTaskInput {
   name: string;
@@ -12,6 +20,11 @@ export interface NewTaskInput {
   material: MaterialItem[];
   plannedWork: string;
   personnel: number; // Personalbedarf, ganzzahlig >= 1 (Standard 1)
+  typ: TaskTyp; // Mängel oder Umbau/Neuinstallation
+  art: string; // A1–C3 ('' = nicht gesetzt)
+  pruefung: string; // Prüfung (einzeilig, nur bei Mängel)
+  fehlerbeschreibung: string; // Fehlerbeschreibung (mehrzeilig, nur bei Mängel)
+  position: string; // Position (einzeilig, nur bei Mängel)
   documents: ProjectDocument[];
 }
 
@@ -39,6 +52,11 @@ export function createTask(projectId: string, input: NewTaskInput): Task {
     material: input.material,
     plannedWork: input.plannedWork,
     personnel: normalizePersonnel(input.personnel),
+    typ: input.typ === 'umbau' ? 'umbau' : 'maengel',
+    art: input.art?.trim() ?? '',
+    pruefung: input.pruefung?.trim() ?? '',
+    fehlerbeschreibung: input.fehlerbeschreibung?.trim() ?? '',
+    position: input.position?.trim() ?? '',
     documents: input.documents,
     status: 'offen',
     editedBy: '',
@@ -57,6 +75,9 @@ export function validateTaskInput(input: NewTaskInput): string | null {
   }
   if (!Number.isInteger(input.personnel) || input.personnel < 1) {
     return 'Personalbedarf muss eine ganze Zahl ab 1 sein.';
+  }
+  if (input.art && !MANGEL_ARTEN.includes(input.art)) {
+    return 'Art muss eine gültige Klassifikation (A1–C3) sein.';
   }
   return null;
 }

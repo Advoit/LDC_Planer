@@ -7,12 +7,13 @@ Eine **offline-first PWA** zum Planen und Ausführen von Bau- und Sanierungsproj
 | Bereich | Funktionen |
 | --- | --- |
 | **Projekte** | Neues Projekt mit Name, Ort und Beschreibung; individuelle 8-stellige Projekt-ID |
-| **Aufgaben** | Vorher-/Nachher-Bilder, Dokumente, Material mit Intellisense, geplanter Arbeitsaufwand (hh:mm) und Personalbedarf |
+| **Aufgaben** | Vorher-/Nachher-Bilder, Dokumente, Material mit Intellisense, geplanter Arbeitsaufwand (hh:mm), Personalbedarf, **Typ** (Mängel/Umbau) und **Art** (A1–C3) |
+| **Mängel-Felder** | Bei Typ „Mängel“: Prüfung, Fehlerbeschreibung (mehrzeilig) und Position – letzte Wahl/Eingabe bleibt erhalten |
 | **Status** | Offen → Hinweis → Behoben mit Pflichtfeldern („Bearbeitet von“, „Bearbeitet am“, Hinweistext) |
-| **Übersicht** | Aufklappbare Suche & Filter, Sortierung nach Name, Status oder Zeitaufwand |
+| **Übersicht** | Aufklappbare Suche & Filter (Status + Typ Mängel/Umbau), Sortierung nach Name, Status, Zeitaufwand, Art oder Position |
 | **Unterlagen** | Pläne und Dokumente projekt- oder aufgabenbezogen, mit Web-Vorschau (PDF, Bilder, Text) |
 | **Sichern & Laden** | Projekt als ZIP exportieren, später laden, zusammenführen oder überschreiben |
-| **Exporte** | Projektbericht und Materialliste als PDF |
+| **Exporte** | Projektbericht und Materialliste als PDF, **Mängelreport als PPTX** (wie die Vorlage) |
 
 ## Nutzungsanleitung
 
@@ -30,6 +31,8 @@ Eine **offline-first PWA** zum Planen und Ausführen von Bau- und Sanierungsproj
   - **Dokumente** (Pläne, Anhänge) hinzufügen
   - **Material** mit Intellisense: Bekannte Artikel aus anderen Aufgaben werden mit der zuletzt verwendeten Einheit vorgeschlagen
   - **Geplanter Arbeitsaufwand** (hh:mm, optional) und **Personalbedarf** (Anzahl Personen, Standard: 1)
+  - **Typ** (Mängel / Umbau/Neuinstallation) und **Art** (A1–C3) – die letzte Wahl bleibt für neue Aufgaben erhalten
+  - Bei Typ **Mängel** werden zusätzlich **Prüfung**, **Fehlerbeschreibung** und **Position** eingeblendet (letzte Eingaben bleiben erhalten)
 - **Bearbeiten**: In der Leiste **Aufgaben → Editieren** aktivieren, dann erscheint an jeder Aufgabe ein Bleistift. Aufgaben lassen sich bearbeiten oder löschen.
 
 ### Status einer Aufgabe verwalten
@@ -45,12 +48,13 @@ Eine Aufgabe in der Übersicht antippen, um die Detailansicht zu öffnen:
 - **Aufgabenbezogene Dokumente** direkt beim Erstellen/Bearbeiten einer Aufgabe.
 - Dokumente lassen sich per **Web-Vorschau** (PDF, Bilder, Text) öffnen oder herunterladen.
 
-### Exporte als PDF
+### Exporte
 
+- **Mängelreport** unter **Dokumente → Mängelreport**: Erstellt eine **PPTX-Datei auf Basis der Vorlage** (`Mängelsreport.pptx`, Seite 1 = Deckblatt, ab Seite 2 eine Reportseite pro Mängel). Es öffnet sich zuerst das Fenster **„Deckblatt Einstellungen“** für Kennung, Saal, Straße, PLZ/Ort, Leitende EFK und Ausführungstermin (Eingaben werden gemerkt). Die Mängel werden **nach Position sortiert** übernommen, inkl. Material, Prüfung, Fehlerbeschreibung und Hinweis zur Behebung. Fotos (Vorher- und Nachher-Bilder, bis zu 8) werden als Raster in der Foto-Fläche platziert – 1 Bild groß, 2 Bilder nebeneinander, mehr im 2-Spalten-Raster – ohne dass die Reportseite mehr Platz braucht.
 - **Projektbericht** unter **Dokumente → Projekt Export**: Enthält Deckblatt, Inhaltsverzeichnis, Projektinformationen, Unterlagen und alle ausgewählten Aufgaben (Status wählbar, Standard: alle). Beschreibung, Material, Hinweise sowie Vorher-/Nachher-Bilder werden mit exportiert.
 - **Materialliste** unter **Dokumente → Material Export**: Nach Aufgaben gruppiert oder als summierte Gesamtliste (nach Name + Einheit). Abgeschlossene Aufgaben können wahlweise einbezogen werden.
 
-Die Exporte werden als echte PDF-Dateien heruntergeladen – es öffnet sich kein neues Fenster.
+Die Exporte werden als echte Dateien (PDF/PPTX) heruntergeladen – es öffnet sich kein neues Fenster. In der Übersicht lässt sich zusätzlich nach **Mängel** bzw. **Umbau/Neuinstallation** filtern (beide sind standardmäßig eingeblendet).
 
 ## Projektdatei-Format
 
@@ -79,6 +83,8 @@ npm install     # Abhängigkeiten installieren
 npm run dev     # Dev-Server starten → http://localhost:5173
 npm run build   # Typecheck + Production-Build nach dist/
 npm test        # Tests ausführen
+
+npm run embed:mangels   # nach Änderungen an Mängelsreport.pptx (Vorlage neu einbetten)
 ```
 
 ## Lizenz

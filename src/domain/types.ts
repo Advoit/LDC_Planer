@@ -10,6 +10,30 @@ export const STATUS_LABELS: Readonly<Record<TaskStatus, string>> = {
   behoben: 'Behoben',
 };
 
+/* ── Aufgabentyp (Mängel / Umbau) ── */
+
+export type TaskTyp = 'maengel' | 'umbau';
+
+export const TASK_TYPS: readonly TaskTyp[] = ['maengel', 'umbau'];
+
+export const TASK_TYP_LABELS: Readonly<Record<TaskTyp, string>> = {
+  maengel: 'Mängel',
+  umbau: 'Umbau/Neuinstallation',
+};
+
+/** Mängel-Klassifikation „Art“ (A1–C3). */
+export const MANGEL_ARTEN: readonly string[] = [
+  'A1',
+  'A2',
+  'A3',
+  'B1',
+  'B2',
+  'B3',
+  'C1',
+  'C2',
+  'C3',
+];
+
 export const MATERIAL_UNITS = ['Stück', 'VPE', 'Meter', 'Eigen'] as const;
 export type MaterialUnit = (typeof MATERIAL_UNITS)[number];
 
@@ -56,6 +80,13 @@ export interface Task {
   material: MaterialItem[];
   plannedWork: string; // hh:mm, leer erlaubt
   personnel: number; // Personalbedarf (Anzahl Personen), ganzzahlig, Standard 1
+
+  /* Mängel-/Umbau-Klassifizierung */
+  typ: TaskTyp; // Mängel oder Umbau/Neuinstallation
+  art: string; // A1–C3 ('' = nicht gesetzt)
+  pruefung: string; // Prüfung (einzeilig, nur bei Mängel)
+  fehlerbeschreibung: string; // Fehlerbeschreibung (mehrzeilig, nur bei Mängel)
+  position: string; // Position (einzeilig, nur bei Mängel)
   documents: ProjectDocument[]; // Pläne, Anhänge, sonstige Unterlagen
 
   /* Status-Felder */

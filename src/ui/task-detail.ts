@@ -9,7 +9,7 @@ import { createImageUploader } from './image-upload';
 import { createDocumentUploader } from './document-upload';
 import { validateStatusFields, applyStatusFields } from '../domain/task';
 import type { StatusFields } from '../domain/task';
-import { TASK_STATUSES, STATUS_LABELS } from '../domain/types';
+import { TASK_STATUSES, STATUS_LABELS, TASK_TYP_LABELS } from '../domain/types';
 import type { Project, Task, TaskStatus } from '../domain/types';
 
 export function openTaskDetail(opts: {
@@ -36,11 +36,23 @@ export function openTaskDetail(opts: {
   const body = el('div', { class: 'task-detail' });
 
   /* ── Erstellungsfelder (nur lesbar) ── */
+  const mangelMeta: string[] = [];
+  if (task.typ) mangelMeta.push(`Typ: ${TASK_TYP_LABELS[task.typ]}`);
+  if (task.art) mangelMeta.push(`Art: ${task.art}`);
+  if (task.position) mangelMeta.push(`Position: ${task.position}`);
+  if (task.pruefung) mangelMeta.push(`Prüfung: ${task.pruefung}`);
+
   body.appendChild(
     el('div', { class: 'detail-section' }, [
       el('h3', { class: 'detail-task-name' }, [task.name]),
       el('p', { class: 'detail-meta' }, [formatDateTime(task.createdAt)]),
       el('p', { class: 'detail-desc' }, [task.description]),
+      mangelMeta.length > 0
+        ? el('p', { class: 'detail-meta' }, [mangelMeta.join('  ·  ')])
+        : el('div'),
+      task.fehlerbeschreibung
+        ? el('p', { class: 'detail-meta' }, [`Fehlerbeschreibung: ${task.fehlerbeschreibung}`])
+        : el('div'),
       task.plannedWork
         ? el('p', { class: 'detail-meta' }, [`Geplanter Aufwand: ${task.plannedWork}`])
         : el('div'),

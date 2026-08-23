@@ -9,6 +9,7 @@ import { openNewProjectFlow } from './ui/project-form';
 import {
   openMaterialExportModal,
   openProjectExportModal,
+  openMangelsreportModal,
 } from './ui/export-flow';
 import { showMergeOrOverwriteDialog, runMergeFlow } from './ui/merge-flow';
 import { openProjectDocumentsModal } from './ui/project-documents';
@@ -133,6 +134,13 @@ function buildToolbar(): HTMLElement {
         icon: 'paperclip',
         items: [
           { label: 'Unterlagen', icon: 'paperclip', onClick: () => void handleProjectDocuments() },
+          {
+            label: 'Mängelreport',
+            icon: 'presentation',
+            onClick: () => {
+              if (project) void openMangelsreportModal(project);
+            },
+          },
           { label: 'Projekt Export', icon: 'file-text', onClick: () => void handleProjectExport() },
           {
             label: 'Material Export',
@@ -187,6 +195,13 @@ function buildMobileNavigation(): HTMLElement {
         icon: 'paperclip',
         items: [
           { label: 'Unterlagen', icon: 'paperclip', onClick: () => void handleProjectDocuments() },
+          {
+            label: 'Mängelreport',
+            icon: 'presentation',
+            onClick: () => {
+              if (project) void openMangelsreportModal(project);
+            },
+          },
           { label: 'Projekt Export', icon: 'file-text', onClick: () => void handleProjectExport() },
           {
             label: 'Material Export',

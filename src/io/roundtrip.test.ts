@@ -28,6 +28,11 @@ async function makeProject(): Promise<Project> {
     ],
     plannedWork: '02:30',
     personnel: 2,
+    typ: 'maengel',
+    art: 'B2',
+    pruefung: 'Sichtprüfung',
+    fehlerbeschreibung: 'Farbe blättert ab',
+    position: 'EG 3',
     status: 'hinweis',
     editedBy: 'Max',
     editedAt: '2026-02-02',
@@ -100,6 +105,12 @@ describe('Export/Import-Roundtrip', () => {
     expect(t.material).toHaveLength(2);
     expect(t.plannedWork).toBe('02:30');
     expect(t.personnel).toBe(2);
+    /* Mängel-/Umbau-Felder */
+    expect(t.typ).toBe('maengel');
+    expect(t.art).toBe('B2');
+    expect(t.pruefung).toBe('Sichtprüfung');
+    expect(t.fehlerbeschreibung).toBe('Farbe blättert ab');
+    expect(t.position).toBe('EG 3');
     /* Dokumente */
     expect(t.documents).toHaveLength(1);
     expect(t.documents[0].name).toBe('Bauplan.pdf');

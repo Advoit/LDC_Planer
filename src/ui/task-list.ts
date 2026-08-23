@@ -1,9 +1,10 @@
 /* ── Aufgaben-Übersicht: Suche, Filter, Sortierung, Liste ── */
 
 import { el, icon, clear } from './dom';
-import { STATUS_LABELS } from '../domain/types';
-import type { Project, Task, TaskStatus } from '../domain/types';
+import { STATUS_LABELS, TASK_TYPS, TASK_TYP_LABELS } from '../domain/types';
+import type { Project, Task, TaskStatus, TaskTyp } from '../domain/types';
 import { plannedWorkToMinutes } from '../domain/task';
+import { compareArt, comparePositions } from '../domain/sort';
 
 export interface TaskListOptions {
   project: Project;
@@ -12,7 +13,7 @@ export interface TaskListOptions {
   onEditTask: (taskId: string) => void;
 }
 
-type SortKey = 'name' | 'status' | 'time';
+type SortKey = 'name' | 'status' | 'time' | 'art' | 'position';
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
   offen: 0,
@@ -23,9 +24,16 @@ const STATUS_ORDER: Record<TaskStatus, number> = {
 export function renderTaskList(container: HTMLElement, opts: TaskListOptions): void {
   clear(container);
 
-  const state: { query: string; filters: Set<TaskStatus>; sort: SortKey } = {
+  const state: {
+    query: string;
+    filters: Set<TaskStatus>;
+    typFilters: Set<TaskTyp>;
+    sort: SortKey;
+  } = {
     query: '',
     filters: new Set<TaskStatus>(['offen', 'hinweis']),
+    /* Standard: beide Typen eingeblendet */
+    typFilters: new Set<TaskTyp>(TASK_TYPS),
     sort: 'name',
   };
 
@@ -79,11 +87,32 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
   chips.get('offen')!.classList.add('active');
   chips.get('hinweis')!.classList.add('active');
 
+  /* Typ-Filter: Mängel / Umbau/Neuinstallation (Standard: beide eingeblendet) */
+  const typRow = el('div', { class: 'filter-row' });
+  typRow.appendChild(el('span', { class: 'filter-label' }, ['Typ:']));
+  const typChips = new Map<TaskTyp, HTMLButtonElement>();
+  for (const typ of TASK_TYPS) {
+    const chip = el('button', { class: 'chip', type: 'button' }, [
+      TASK_TYP_LABELS[typ],
+    ]) as HTMLButtonElement;
+    chip.addEventListener('click', () => {
+      if (state.typFilters.has(typ)) state.typFilters.delete(typ);
+      else state.typFilters.add(typ);
+      chip.classList.toggle('active', state.typFilters.has(typ));
+      renderList();
+    });
+    chip.classList.add('active');
+    typChips.set(typ, chip);
+    typRow.appendChild(chip);
+  }
+
   const sortSelect = el('select', { class: 'input sort-select' }) as HTMLSelectElement;
   const sortOptions: { value: SortKey; label: string }[] = [
     { value: 'name', label: 'Name' },
     { value: 'status', label: 'Status' },
     { value: 'time', label: 'Zeitaufwand' },
+    { value: 'art', label: 'Art' },
+    { value: 'position', label: 'Position' },
   ];
   for (const o of sortOptions) {
     sortSelect.appendChild(el('option', { value: o.value }, [o.label]));
@@ -95,6 +124,8 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
 
   panel.appendChild(searchInput);
   panel.appendChild(el('div', { class: 'filter-sort-row' }, [filterRow, sortSelect]));
+  panel.appendChild(typRow);
+
   controls.appendChild(panel);
 
   container.appendChild(controls);
@@ -107,6 +138,9 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
     let tasks = opts.project.tasks;
     if (state.filters.size > 0) {
       tasks = tasks.filter((t) => state.filters.has(t.status));
+    }
+    if (state.typFilters.size > 0) {
+      tasks = tasks.filter((t) => state.typFilters.has(t.typ ?? 'maengel'));
     }
     const q = state.query.trim().toLowerCase();
     if (q) {
@@ -128,6 +162,20 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
       case 'time':
         tasks = [...tasks].sort(
           (a, b) => plannedWorkToMinutes(a.plannedWork) - plannedWorkToMinutes(b.plannedWork),
+        );
+        break;
+      case 'art':
+        tasks = [...tasks].sort(
+          (a, b) =>
+            compareArt(a.art ?? '', b.art ?? '') ||
+            a.name.localeCompare(b.name, 'de'),
+        );
+        break;
+      case 'position':
+        tasks = [...tasks].sort(
+          (a, b) =>
+            comparePositions(a.position ?? '', b.position ?? '') ||
+            a.name.localeCompare(b.name, 'de'),
         );
         break;
     }
@@ -157,14 +205,20 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
       const statusBadge = el('span', { class: `badge badge-${task.status}` }, [
         STATUS_LABELS[task.status],
       ]);
+      const typ = task.typ ?? 'maengel';
+      const typBadge = el('span', { class: `badge badge-typ badge-typ-${typ}` }, [
+        TASK_TYP_LABELS[typ],
+      ]);
 
       const info = el('div', { class: 'task-info' }, [
         el('div', { class: 'task-info-top' }, [
           el('span', { class: 'task-name' }, [task.name]),
-          statusBadge,
+          el('span', { class: 'task-badges' }, [typBadge, statusBadge]),
         ]),
         el('p', { class: 'task-desc-clamp' }, [task.description]),
         el('div', { class: 'task-meta' }, [
+          task.art ? el('span', {}, [`🏷 ${task.art}`]) : el('span'),
+          task.position ? el('span', {}, [`📍 ${task.position}`]) : el('span'),
           task.plannedWork ? el('span', {}, [`⏱ ${task.plannedWork}`]) : el('span'),
           el('span', {}, [`👤 ${task.personnel ?? 1} Pers.`]),
           task.material.length > 0

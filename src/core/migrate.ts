@@ -93,6 +93,13 @@ function normalizeTask(t: Partial<Task>): Task {
       t.personnel >= 1
         ? t.personnel
         : 1,
+    /* Mängel-/Umbau-Klassifizierung: alte Aufgaben gelten als Mängel */
+    typ: t.typ === 'umbau' ? 'umbau' : 'maengel',
+    art: typeof t.art === 'string' ? t.art : '',
+    pruefung: typeof t.pruefung === 'string' ? t.pruefung : '',
+    fehlerbeschreibung:
+      typeof t.fehlerbeschreibung === 'string' ? t.fehlerbeschreibung : '',
+    position: typeof t.position === 'string' ? t.position : '',
     documents: normalizeDocuments(t.documents),
     status:
       typeof t.status === 'string' &&

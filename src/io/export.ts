@@ -40,6 +40,11 @@ export interface ExportedTask {
   material: Task['material'];
   plannedWork: string;
   personnel: number;
+  typ: Task['typ'];
+  art: string;
+  pruefung: string;
+  fehlerbeschreibung: string;
+  position: string;
   status: Task['status'];
   editedBy: string;
   editedAt: string;
@@ -158,6 +163,11 @@ export function buildProjectZip(project: Project): Blob {
       material: task.material,
       plannedWork: task.plannedWork,
       personnel: task.personnel ?? 1,
+      typ: task.typ ?? 'maengel',
+      art: task.art ?? '',
+      pruefung: task.pruefung ?? '',
+      fehlerbeschreibung: task.fehlerbeschreibung ?? '',
+      position: task.position ?? '',
       status: task.status,
       editedBy: task.editedBy,
       editedAt: task.editedAt,

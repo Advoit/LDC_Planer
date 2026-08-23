@@ -97,6 +97,11 @@ function tasksContentEqual(a: Task, b: Task): boolean {
     a.hintText === b.hintText &&
     a.plannedWork === b.plannedWork &&
     a.personnel === b.personnel &&
+    a.typ === b.typ &&
+    a.art === b.art &&
+    a.pruefung === b.pruefung &&
+    a.fehlerbeschreibung === b.fehlerbeschreibung &&
+    a.position === b.position &&
     materialEqual(a.material, b.material)
   );
 }

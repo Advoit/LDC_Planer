@@ -20,8 +20,16 @@
 
 .filter-row {
   display: flex;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.filter-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  margin-right: 2px;
 }
 
 .sort-select {

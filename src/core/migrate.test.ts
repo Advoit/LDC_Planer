@@ -25,6 +25,12 @@ describe('migrateProject', () => {
     expect(project.tasks[0].documents).toEqual([]);
     /* Personalbedarf fehlt in alten Daten → Standard 1 */
     expect(project.tasks[0].personnel).toBe(1);
+    /* Mängel-/Umbau-Felder: alte Aufgaben gelten als Mängel, Rest leer */
+    expect(project.tasks[0].typ).toBe('maengel');
+    expect(project.tasks[0].art).toBe('');
+    expect(project.tasks[0].pruefung).toBe('');
+    expect(project.tasks[0].fehlerbeschreibung).toBe('');
+    expect(project.tasks[0].position).toBe('');
     expect(project.documents).toEqual([]);
     expect(project.tasks[1].status).toBe('hinweis');
   });

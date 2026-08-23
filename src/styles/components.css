@@ -357,6 +357,14 @@
 
 .task-name { font-weight: 600; font-size: 15px; }
 
+.task-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .task-desc-clamp {
   color: var(--text-secondary);
   font-size: 13px;
@@ -770,7 +778,7 @@
   transition: max-height 0.25s ease;
 }
 
-.list-controls.filter-open .list-filter-panel { max-height: 360px; }
+.list-controls.filter-open .list-filter-panel { max-height: 440px; }
 
 /* ═══════════════════ Dokument-Vorschau ═══════════════════ */
 

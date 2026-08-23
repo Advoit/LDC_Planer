@@ -248,8 +248,14 @@ select.input {
 .badge-hinweis { background: rgba(255, 149, 0, 0.12); color: var(--status-hinweis); }
 .badge-behoben { background: rgba(52, 199, 89, 0.12); color: var(--status-behoben); }
 
+/* Typ-Badges (Mängel / Umbau/Neuinstallation) */
+.badge-typ-maengel { background: rgba(94, 92, 230, 0.12); color: #5E5CE6; }
+.badge-typ-umbau { background: rgba(48, 176, 199, 0.14); color: #1E9BB0; }
+
 @media (prefers-color-scheme: dark) {
   .badge-offen { background: rgba(10, 132, 255, 0.18); }
   .badge-hinweis { background: rgba(255, 159, 10, 0.18); }
   .badge-behoben { background: rgba(52, 199, 89, 0.18); }
+  .badge-typ-maengel { background: rgba(94, 92, 230, 0.22); color: #A6A4FF; }
+  .badge-typ-umbau { background: rgba(48, 176, 199, 0.22); color: #7BD3E8; }
 }
