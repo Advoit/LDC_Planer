@@ -44,6 +44,10 @@ export function createDocumentUploader(
   addBtn.addEventListener('click', () => pickAndAddDocuments());
   container.appendChild(addBtn);
 
+  container.appendChild(
+    el('span', { class: 'drop-hint' }, ['… oder Dateien hierher ziehen']),
+  );
+
   if (opts.hint) {
     container.appendChild(
       el('p', { class: 'field-hint' }, [opts.hint]),
@@ -55,26 +59,57 @@ export function createDocumentUploader(
     addRow(doc);
   }
 
+  /* ── Drag & Drop ── */
+  let dragDepth = 0;
+  container.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    dragDepth++;
+    container.classList.add('drag-over');
+  });
+  container.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+  container.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) container.classList.remove('drag-over');
+  });
+  container.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dragDepth = 0;
+    container.classList.remove('drag-over');
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) void addFiles(files);
+  });
+  container.addEventListener('dragend', () => {
+    dragDepth = 0;
+    container.classList.remove('drag-over');
+  });
+
   function pickAndAddDocuments(): void {
     const input = el('input', { type: 'file', multiple: 'true' });
-    input.addEventListener('change', async () => {
+    input.addEventListener('change', () => {
       const files = input.files;
-      if (!files) return;
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const dataUrl = await fileToDataUrl(file);
-        const hash = await sha256Hex(await file.arrayBuffer());
-        addRow({
-          id: randomId(),
-          name: file.name,
-          mime: file.type || 'application/octet-stream',
-          size: file.size,
-          dataUrl,
-          hash,
-        });
-      }
+      if (files) void addFiles(files);
     });
     input.click();
+  }
+
+  async function addFiles(files: FileList | File[]): Promise<void> {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const dataUrl = await fileToDataUrl(file);
+      const hash = await sha256Hex(await file.arrayBuffer());
+      addRow({
+        id: randomId(),
+        name: file.name,
+        mime: file.type || 'application/octet-stream',
+        size: file.size,
+        dataUrl,
+        hash,
+      });
+    }
   }
 
   function addRow(doc: ProjectDocument): void {

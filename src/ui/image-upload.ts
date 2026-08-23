@@ -51,51 +51,78 @@ export function createImageUploader(opts: ImageUploadOptions): ImageUploadHandle
   addBtn.addEventListener('click', () => pickAndAddImages());
   container.appendChild(addBtn);
 
+  container.appendChild(
+    el('span', { class: 'drop-hint' }, ['… oder Bilder hierher ziehen']),
+  );
+
   /* Bestand laden */
-  let initialRegenerating = false;
   for (const img of opts.images) {
     addImageToList(img);
   }
   if (!thumbnailSourceId && opts.images.length > 0 && opts.showThumbnailPicker !== false) {
     thumbnailSourceId = opts.images[0].id;
-    entries[0]?.element.querySelector<HTMLInputElement>('.thumb-radio')?.setAttribute('checked', '');
-    initialRegenerating = true;
+    const firstRadio = entries[0]?.element.querySelector<HTMLInputElement>('.thumb-radio');
+    if (firstRadio) firstRadio.checked = true;
   }
 
-  async function regenerateOnBoot() {
-    if (initialRegenerating && thumbnailSourceId && opts.showThumbnailPicker !== false) {
-      const entry = entries.find(e => e.image.id === thumbnailSourceId);
-      if (entry) {
-        thumbnailDataUrl = await generateThumbnail(entry.image.dataUrl);
-      }
-    }
-  }
   void regenerateOnBoot();
+
+  /* ── Drag & Drop ── */
+  let dragDepth = 0;
+  container.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    dragDepth++;
+    container.classList.add('drag-over');
+  });
+  container.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+  container.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) container.classList.remove('drag-over');
+  });
+  container.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dragDepth = 0;
+    container.classList.remove('drag-over');
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) void addFiles(files);
+  });
+  container.addEventListener('dragend', () => {
+    dragDepth = 0;
+    container.classList.remove('drag-over');
+  });
 
   /* ── Helpers ── */
 
   function pickAndAddImages(): void {
     const input = el('input', { type: 'file', accept: 'image/*', multiple: 'true' });
-    input.addEventListener('change', async () => {
+    input.addEventListener('change', () => {
       const files = input.files;
-      if (!files) return;
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const dataUrl = await fileToDataUrl(file);
-        const arrayBuffer = await file.arrayBuffer();
-        const hash = await sha256Hex(arrayBuffer);
-        const img: TaskImage = { id: randomId(), dataUrl, hash };
-        addImageToList(img);
-      }
-      /* Auto-select first as thumbnail if none selected */
-      if (opts.showThumbnailPicker !== false && !thumbnailSourceId && entries.length > 0) {
-        const first = entries[0];
-        thumbnailSourceId = first.image.id;
-        first.element.querySelector<HTMLInputElement>('.thumb-radio')!.checked = true;
-        thumbnailDataUrl = await generateThumbnail(first.image.dataUrl);
-      }
+      if (files) void addFiles(files);
     });
     input.click();
+  }
+
+  async function addFiles(files: FileList | File[]): Promise<void> {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file.type.startsWith('image/')) continue;
+      const dataUrl = await fileToDataUrl(file);
+      const arrayBuffer = await file.arrayBuffer();
+      const hash = await sha256Hex(arrayBuffer);
+      const img: TaskImage = { id: randomId(), dataUrl, hash };
+      await addImageToList(img);
+    }
+    /* Auto-select first as thumbnail if none selected */
+    if (opts.showThumbnailPicker !== false && !thumbnailSourceId && entries.length > 0) {
+      const first = entries[0];
+      thumbnailSourceId = first.image.id;
+      first.element.querySelector<HTMLInputElement>('.thumb-radio')!.checked = true;
+      thumbnailDataUrl = await generateThumbnail(first.image.dataUrl);
+    }
   }
 
   async function addImageToList(img: TaskImage): Promise<void> {
@@ -115,6 +142,8 @@ export function createImageUploader(opts: ImageUploadOptions): ImageUploadHandle
         class: 'thumb-radio',
       }) as HTMLInputElement;
       radio.value = img.id;
+      /* Beim Bearbeiten gespeicherte Vorschau-Auswahl wiederherstellen */
+      if (thumbnailSourceId === img.id) radio.checked = true;
       radio.addEventListener('change', async () => {
         thumbnailSourceId = img.id;
         thumbnailDataUrl = await generateThumbnail(img.dataUrl);
@@ -150,6 +179,15 @@ export function createImageUploader(opts: ImageUploadOptions): ImageUploadHandle
     card.appendChild(delBtn);
     grid.appendChild(card);
     entries.push({ image: img, element: card });
+  }
+
+  async function regenerateOnBoot(): Promise<void> {
+    /* Vorschaubild beim Bearbeiten aus dem gespeicherten Quellbild neu erzeugen */
+    if (!thumbnailSourceId || opts.showThumbnailPicker === false) return;
+    const entry = entries.find((e) => e.image.id === thumbnailSourceId);
+    if (entry) {
+      thumbnailDataUrl = await generateThumbnail(entry.image.dataUrl);
+    }
   }
 
   return {
