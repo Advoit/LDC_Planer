@@ -44,6 +44,9 @@ export function openTaskDetail(opts: {
       task.plannedWork
         ? el('p', { class: 'detail-meta' }, [`Geplanter Aufwand: ${task.plannedWork}`])
         : el('div'),
+      el('p', { class: 'detail-meta' }, [
+        `Personalbedarf: ${task.personnel ?? 1} ${(task.personnel ?? 1) === 1 ? 'Person' : 'Personen'}`,
+      ]),
     ]),
   );
 

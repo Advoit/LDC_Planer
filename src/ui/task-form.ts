@@ -88,6 +88,19 @@ export function openTaskForm(opts: {
       step: '60',
       value: task?.plannedWork ?? '',
     }),
+
+    /* Personalbedarf */
+    el('label', { class: 'field-label' }, ['Personalbedarf (Anzahl Personen)']),
+    el('input', {
+      type: 'number',
+      class: 'input input-time',
+      name: 'personnel',
+      min: '1',
+      step: '1',
+      inputmode: 'numeric',
+      placeholder: '1',
+      value: task?.personnel ?? 1,
+    }),
   ]);
 
   return new Promise((resolve) => {
@@ -107,6 +120,10 @@ export function openTaskForm(opts: {
           const nameInput = body.querySelector<HTMLInputElement>('[name="name"]');
           const descInput = body.querySelector<HTMLTextAreaElement>('[name="description"]');
           const timeInput = body.querySelector<HTMLInputElement>('[name="plannedWork"]');
+          const personnelInput = body.querySelector<HTMLInputElement>('[name="personnel"]');
+
+          const personnelRaw = personnelInput?.value.trim() ?? '';
+          const personnel = personnelRaw === '' ? 1 : Number(personnelRaw);
 
           const input: NewTaskInput = {
             name: nameInput?.value ?? '',
@@ -116,6 +133,7 @@ export function openTaskForm(opts: {
             thumbnailSourceId: imageUploader.getThumbnailSourceId(),
             material: materialEditor.getItems(),
             plannedWork: timeInput?.value?.trim() ?? '',
+            personnel,
             documents: documentUploader.getDocuments(),
           };
 

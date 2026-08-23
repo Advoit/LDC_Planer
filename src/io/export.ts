@@ -39,6 +39,7 @@ export interface ExportedTask {
   thumbnailSourceId: string | null;
   material: Task['material'];
   plannedWork: string;
+  personnel: number;
   status: Task['status'];
   editedBy: string;
   editedAt: string;
@@ -156,6 +157,7 @@ export function buildProjectZip(project: Project): Blob {
       thumbnailSourceId: task.thumbnailSourceId,
       material: task.material,
       plannedWork: task.plannedWork,
+      personnel: task.personnel ?? 1,
       status: task.status,
       editedBy: task.editedBy,
       editedAt: task.editedAt,

@@ -150,7 +150,7 @@ function buildToolbar(): HTMLElement {
         label: 'Aufgaben',
         icon: 'list',
         items: [
-          { label: 'Neue Aufgabe', icon: 'plus', onClick: () => void handleNewTask(), kind: 'primary' },
+          { label: 'Neue Aufgabe', icon: 'plus', onClick: () => void handleNewTask() },
           {
             label: editMode ? 'Fertig' : 'Editieren',
             icon: editMode ? 'check' : 'pencil',
@@ -201,7 +201,7 @@ function buildMobileNavigation(): HTMLElement {
         label: 'Aufgaben',
         icon: 'list',
         items: [
-          { label: 'Neue Aufgabe', icon: 'plus', onClick: () => void handleNewTask(), primary: true },
+          { label: 'Neue Aufgabe', icon: 'plus', onClick: () => void handleNewTask() },
           {
             label: editMode ? 'Fertig' : 'Editieren',
             icon: editMode ? 'check' : 'pencil',

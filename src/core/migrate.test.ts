@@ -23,6 +23,8 @@ describe('migrateProject', () => {
     expect(project.tasks[0].afterImages).toEqual([]);
     expect(project.tasks[0].material).toEqual([]);
     expect(project.tasks[0].documents).toEqual([]);
+    /* Personalbedarf fehlt in alten Daten → Standard 1 */
+    expect(project.tasks[0].personnel).toBe(1);
     expect(project.documents).toEqual([]);
     expect(project.tasks[1].status).toBe('hinweis');
   });

@@ -11,6 +11,7 @@ export interface NewTaskInput {
   thumbnailSourceId: string | null;
   material: MaterialItem[];
   plannedWork: string;
+  personnel: number; // Personalbedarf, ganzzahlig >= 1 (Standard 1)
   documents: ProjectDocument[];
 }
 
@@ -37,6 +38,7 @@ export function createTask(projectId: string, input: NewTaskInput): Task {
     thumbnailSourceId: input.thumbnailSourceId,
     material: input.material,
     plannedWork: input.plannedWork,
+    personnel: normalizePersonnel(input.personnel),
     documents: input.documents,
     status: 'offen',
     editedBy: '',
@@ -53,7 +55,15 @@ export function validateTaskInput(input: NewTaskInput): string | null {
   if (input.plannedWork && !/^\d{1,2}:\d{2}$/.test(input.plannedWork.trim())) {
     return 'Geplanter Arbeitsaufwand muss im Format hh:mm sein.';
   }
+  if (!Number.isInteger(input.personnel) || input.personnel < 1) {
+    return 'Personalbedarf muss eine ganze Zahl ab 1 sein.';
+  }
   return null;
+}
+
+/** Normalisiert den Personalbedarf auf eine ganze Zahl >= 1 (Standard 1). */
+export function normalizePersonnel(value: number | undefined | null): number {
+  return Number.isInteger(value) && (value as number) >= 1 ? (value as number) : 1;
 }
 
 /**

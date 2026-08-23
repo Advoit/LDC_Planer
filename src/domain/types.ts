@@ -55,6 +55,7 @@ export interface Task {
   thumbnailSourceId: string | null; // ID des Quell-Bildes für thumbnail
   material: MaterialItem[];
   plannedWork: string; // hh:mm, leer erlaubt
+  personnel: number; // Personalbedarf (Anzahl Personen), ganzzahlig, Standard 1
   documents: ProjectDocument[]; // Pläne, Anhänge, sonstige Unterlagen
 
   /* Status-Felder */

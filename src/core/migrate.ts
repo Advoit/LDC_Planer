@@ -87,6 +87,12 @@ function normalizeTask(t: Partial<Task>): Task {
       typeof t.thumbnailSourceId === 'string' ? t.thumbnailSourceId : null,
     material: Array.isArray(t.material) ? t.material : [],
     plannedWork: typeof t.plannedWork === 'string' ? t.plannedWork : '',
+    personnel:
+      typeof t.personnel === 'number' &&
+      Number.isInteger(t.personnel) &&
+      t.personnel >= 1
+        ? t.personnel
+        : 1,
     documents: normalizeDocuments(t.documents),
     status:
       typeof t.status === 'string' &&

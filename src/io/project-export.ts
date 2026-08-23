@@ -337,6 +337,7 @@ async function taskSection(ctx: PdfContext, task: Task): Promise<number> {
   /* Metazeile (umbrechend, damit nichts am rechten Rand abgeschnitten wird) */
   const meta: string[] = [];
   if (task.plannedWork) meta.push(`Geplanter Aufwand: ${task.plannedWork}`);
+  if (task.personnel) meta.push(`Personalbedarf: ${task.personnel}`);
   if (task.editedBy) meta.push(`Bearbeitet von: ${task.editedBy}`);
   if (task.editedAt) meta.push(`Bearbeitet am: ${formatDate(task.editedAt)}`);
   if (meta.length > 0) {

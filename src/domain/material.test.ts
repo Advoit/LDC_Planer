@@ -18,6 +18,7 @@ function makeTask(id: string, material: { name: string; quantity: number; unit: 
     thumbnailSourceId: null,
     material: material.map((m, i) => ({ id: `${id}-${i}`, ...m })),
     plannedWork: '',
+    personnel: 1,
     status: 'offen',
     editedBy: '',
     editedAt: '',

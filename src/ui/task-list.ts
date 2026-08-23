@@ -166,6 +166,7 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
         el('p', { class: 'task-desc-clamp' }, [task.description]),
         el('div', { class: 'task-meta' }, [
           task.plannedWork ? el('span', {}, [`⏱ ${task.plannedWork}`]) : el('span'),
+          el('span', {}, [`👤 ${task.personnel ?? 1} Pers.`]),
           task.material.length > 0
             ? el('span', {}, [`${task.material.length} Materialpositionen`])
             : el('span'),

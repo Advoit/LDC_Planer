@@ -125,6 +125,7 @@ async function rebuildTasks(
       thumbnailSourceId: et.thumbnailSourceId ?? null,
       material: et.material ?? [],
       plannedWork: et.plannedWork ?? '',
+      personnel: et.personnel ?? 1,
       documents,
       status: et.status ?? 'offen',
       editedBy: et.editedBy ?? '',

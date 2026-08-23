@@ -27,6 +27,7 @@ async function makeProject(): Promise<Project> {
       { id: 'M2', name: 'Pinsel', quantity: 2, unit: 'Stück' },
     ],
     plannedWork: '02:30',
+    personnel: 2,
     status: 'hinweis',
     editedBy: 'Max',
     editedAt: '2026-02-02',
@@ -98,6 +99,7 @@ describe('Export/Import-Roundtrip', () => {
     expect(t.images[0].dataUrl.startsWith('data:image/png')).toBe(true);
     expect(t.material).toHaveLength(2);
     expect(t.plannedWork).toBe('02:30');
+    expect(t.personnel).toBe(2);
     /* Dokumente */
     expect(t.documents).toHaveLength(1);
     expect(t.documents[0].name).toBe('Bauplan.pdf');

@@ -29,6 +29,7 @@ function makeTask(id: string, name: string, extra: Partial<Task> = {}): Task {
     thumbnailSourceId: null,
     material: [],
     plannedWork: '',
+    personnel: 1,
     status: 'offen',
     editedBy: '',
     editedAt: '',
