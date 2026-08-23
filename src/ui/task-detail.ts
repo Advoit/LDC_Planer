@@ -1,10 +1,12 @@
 /* ── Aufgaben-Detail: Übersicht & Status-Änderung ── */
 
-import { el, formatDateTime, downloadDataUrl, formatFileSize } from './dom';
+import { el, formatDateTime, formatFileSize } from './dom';
 import { openModal } from './modal';
 import { showToast } from './toast';
 import { openImageViewer } from './image-viewer';
+import { openDocumentPreview } from './document-preview';
 import { createImageUploader } from './image-upload';
+import { createDocumentUploader } from './document-upload';
 import { validateStatusFields, applyStatusFields } from '../domain/task';
 import type { StatusFields } from '../domain/task';
 import { TASK_STATUSES, STATUS_LABELS } from '../domain/types';
@@ -23,6 +25,12 @@ export function openTaskDetail(opts: {
     thumbnailSourceId: null,
     showThumbnailPicker: false,
     label: 'Nachher-Bilder',
+  });
+
+  const afterDocs = createDocumentUploader({
+    documents: task.afterDocuments ?? [],
+    label: 'Nachher-Dokumente',
+    hint: 'Dokumente zur Nachbearbeitung, z. B. Berichte oder Fotos als Datei (optional).',
   });
 
   const body = el('div', { class: 'task-detail' });
@@ -64,7 +72,7 @@ export function openTaskDetail(opts: {
         }, ['Öffnen']),
       ]);
       row.querySelector('button')!.addEventListener('click', () => {
-        downloadDataUrl(doc.dataUrl, doc.name);
+        openDocumentPreview(doc);
       });
       docList.appendChild(row);
     }
@@ -129,6 +137,9 @@ export function openTaskDetail(opts: {
   /* Nachher-Bilder */
   statusSection.appendChild(afterImages.element);
 
+  /* Nachher-Dokumente */
+  statusSection.appendChild(afterDocs.element);
+
   /* Dynamische Pflichtfelder */
   const hintLabel = statusSection.querySelector('.hint-label')!;
   function updateRequiredFields(): void {
@@ -167,6 +178,7 @@ export function openTaskDetail(opts: {
             editedAt: editedAtInput.value,
             hintText: hintTextInput.value,
             afterImages: afterImages.getImages(),
+            afterDocuments: afterDocs.getDocuments(),
           };
           const err = validateStatusFields(fields);
           if (err) {

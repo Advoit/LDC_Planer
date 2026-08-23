@@ -1,6 +1,7 @@
 /* ── Dokument-Upload: Liste mit Upload, Download & Löschen ── */
 
 import { el, icon, downloadDataUrl, formatFileSize } from './dom';
+import { openDocumentPreview } from './document-preview';
 import { sha256Hex } from '../core/hash';
 import { randomId } from '../core/id';
 import type { ProjectDocument } from '../domain/types';
@@ -83,6 +84,16 @@ export function createDocumentUploader(
       el('span', { class: 'document-size' }, [formatFileSize(doc.size)]),
     ]);
 
+    const previewBtn = el('button', {
+      class: 'icon-btn document-action',
+      type: 'button',
+      title: 'Vorschau',
+      'aria-label': `Vorschau: ${doc.name}`,
+    }, [icon('eye')]);
+    previewBtn.addEventListener('click', () => {
+      openDocumentPreview(doc);
+    });
+
     const downloadBtn = el('button', {
       class: 'icon-btn document-action',
       type: 'button',
@@ -105,6 +116,7 @@ export function createDocumentUploader(
       row.remove();
     });
 
+    row.appendChild(previewBtn);
     row.appendChild(downloadBtn);
     row.appendChild(delBtn);
     list.appendChild(row);

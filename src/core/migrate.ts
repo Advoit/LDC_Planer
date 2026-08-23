@@ -97,6 +97,7 @@ function normalizeTask(t: Partial<Task>): Task {
     editedAt: typeof t.editedAt === 'string' ? t.editedAt : '',
     hintText: typeof t.hintText === 'string' ? t.hintText : '',
     afterImages: normalizeImages(t.afterImages),
+    afterDocuments: normalizeDocuments(t.afterDocuments),
   };
 }
 

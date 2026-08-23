@@ -108,6 +108,11 @@ async function rebuildTasks(
       }
     }
     const documents = await loadDocuments(fileMap, et.documents ?? [], taskDir);
+    const afterDocuments = await loadDocuments(
+      fileMap,
+      et.afterDocuments ?? [],
+      taskDir,
+    );
     tasks.push({
       id: et.id,
       projectId: et.projectId,
@@ -126,6 +131,7 @@ async function rebuildTasks(
       editedAt: et.editedAt ?? '',
       hintText: et.hintText ?? '',
       afterImages,
+      afterDocuments,
     });
   }
   return tasks;

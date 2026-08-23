@@ -29,8 +29,21 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
     sort: 'name',
   };
 
-  /* ── Steuerleiste ── */
+  /* ── Steuerleiste (aufklappbar) ── */
   const controls = el('div', { class: 'list-controls' });
+
+  const toggleBtn = el('button', { class: 'filter-toggle', type: 'button' }, [
+    icon('search'),
+    el('span', { class: 'filter-toggle-label' }, ['Suche & Filter']),
+    icon('chevron'),
+  ]) as HTMLButtonElement;
+  toggleBtn.addEventListener('click', () => {
+    const open = controls.classList.toggle('filter-open');
+    toggleBtn.classList.toggle('open', open);
+  });
+  controls.appendChild(toggleBtn);
+
+  const panel = el('div', { class: 'list-filter-panel' });
 
   const searchInput = el('input', {
     type: 'search',
@@ -80,8 +93,9 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
     renderList();
   });
 
-  controls.appendChild(searchInput);
-  controls.appendChild(el('div', { class: 'filter-sort-row' }, [filterRow, sortSelect]));
+  panel.appendChild(searchInput);
+  panel.appendChild(el('div', { class: 'filter-sort-row' }, [filterRow, sortSelect]));
+  controls.appendChild(panel);
 
   container.appendChild(controls);
 

@@ -32,6 +32,16 @@ async function makeProject(): Promise<Project> {
     editedAt: '2026-02-02',
     hintText: 'Farbe angetrocknet',
     afterImages: [{ id: 'IMG-2', dataUrl: png, hash }],
+    afterDocuments: [
+      {
+        id: 'ADOC-1',
+        name: 'Abnahmebericht.txt',
+        mime: 'text/plain',
+        size: 42,
+        dataUrl: 'data:text/plain;base64,SGFsbG8h',
+        hash: 'adoc-hash-1',
+      },
+    ],
     documents: [
       {
         id: 'DOC-1',
@@ -93,6 +103,10 @@ describe('Export/Import-Roundtrip', () => {
     expect(t.documents[0].name).toBe('Bauplan.pdf');
     expect(t.documents[0].mime).toBe('application/pdf');
     expect(t.documents[0].dataUrl.startsWith('data:application/pdf')).toBe(true);
+    /* Nachher-Dokumente */
+    expect(t.afterDocuments).toHaveLength(1);
+    expect(t.afterDocuments[0].name).toBe('Abnahmebericht.txt');
+    expect(t.afterDocuments[0].dataUrl.startsWith('data:text/plain')).toBe(true);
     expect(imported!.documents).toHaveLength(1);
     expect(imported!.documents[0].name).toBe('Genehmigung.pdf');
   });

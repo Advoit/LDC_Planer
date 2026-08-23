@@ -63,6 +63,7 @@ export interface Task {
   editedAt: string;
   hintText: string;
   afterImages: TaskImage[]; // Nachher-Bilder
+  afterDocuments: ProjectDocument[]; // Dokumente zur Nachbearbeitung (Status-Bereich)
 }
 
 /* ── Projekt ── */

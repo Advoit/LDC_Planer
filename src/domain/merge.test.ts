@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeProjects, canMergeProjects } from './merge';
+import { mergeProjects } from './merge';
 import type { Project, Task, TaskImage } from './types';
 
 function makeProject(id = 'ABCD1234'): Project {
@@ -36,20 +36,12 @@ function makeTask(id: string, name: string, extra: Partial<Task> = {}): Task {
     afterImages: [],
     documents: [],
     ...extra,
-  };
+  } as Task;
 }
 
 function makeImage(id: string, hash: string): TaskImage {
   return { id, dataUrl: `data:image/png;base64,${id}`, hash };
 }
-
-describe('canMergeProjects', () => {
-  it('erlaubt Merge nur bei identischer Projekt-ID', () => {
-    expect(canMergeProjects(makeProject('AAAA1111'), makeProject('AAAA1111'))).toBe(true);
-    expect(canMergeProjects(makeProject('AAAA1111'), makeProject('BBBB2222'))).toBe(false);
-    expect(canMergeProjects(null, makeProject())).toBe(false);
-  });
-});
 
 describe('mergeProjects', () => {
   it('behält identische Tasks ohne Konflikt (lokal) und führt Bilder zusammen', async () => {
@@ -137,5 +129,50 @@ describe('mergeProjects', () => {
     const names = result.merged.tasks.map((t) => t.id).sort();
     expect(names).toEqual(['T-I', 'T-L']);
     expect(result.added).toBe(1);
+    expect(result.sameId).toBe(true);
+  });
+
+  it('erlaubt Zusammenführen bei unterschiedlicher Projekt-ID und hängt Aufgaben an', async () => {
+    const local = makeProject('AAAA1111');
+    local.tasks = [makeTask('T-L', 'Nur lokal')];
+    const imported = makeProject('BBBB2222');
+    imported.tasks = [makeTask('T-I', 'Nur importiert')];
+
+    const result = await mergeProjects(local, imported, () => 'local');
+    expect(result.sameId).toBe(false);
+    expect(result.merged.id).toBe('AAAA1111');
+    expect(result.merged.tasks.map((t) => t.id).sort()).toEqual(['T-I', 'T-L']);
+    /* Importierte Aufgaben werden auf das lokale Projekt umgehängt */
+    expect(result.merged.tasks.find((t) => t.id === 'T-I')!.projectId).toBe('AAAA1111');
+  });
+
+  it('hängt bei „Importiertes übernehmen“ mit unterschiedlicher ID ebenfalls um', async () => {
+    const local = makeProject('AAAA1111');
+    local.tasks = [makeTask('T1', 'Alt', { description: 'lokal' })];
+    const imported = makeProject('BBBB2222');
+    imported.tasks = [makeTask('T1', 'Alt', { description: 'importiert' })];
+
+    const result = await mergeProjects(local, imported, () => 'imported');
+    expect(result.sameId).toBe(false);
+    expect(result.merged.tasks[0].description).toBe('importiert');
+    expect(result.merged.tasks[0].projectId).toBe('AAAA1111');
+  });
+
+  it('führt Nachher-Dokumente per Hash zusammen', async () => {
+    const makeDoc = (id: string, hash: string) => ({
+      id,
+      name: `${id}.pdf`,
+      mime: 'application/pdf',
+      size: 100,
+      dataUrl: `data:application/pdf;base64,${id}`,
+      hash,
+    });
+    const local = makeProject('AAAA1111');
+    local.tasks = [makeTask('T1', 'X', { afterDocuments: [makeDoc('d1', 'hash-1')] })];
+    const imported = makeProject('AAAA1111');
+    imported.tasks = [makeTask('T1', 'X', { afterDocuments: [makeDoc('d1', 'hash-1'), makeDoc('d2', 'hash-2')] })];
+
+    const result = await mergeProjects(local, imported, () => 'local');
+    expect(result.merged.tasks[0].afterDocuments.map((d) => d.hash)).toEqual(['hash-1', 'hash-2']);
   });
 });

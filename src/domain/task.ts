@@ -20,6 +20,7 @@ export interface StatusFields {
   editedAt: string;
   hintText: string;
   afterImages: TaskImage[];
+  afterDocuments: ProjectDocument[];
 }
 
 export function createTask(projectId: string, input: NewTaskInput): Task {
@@ -42,6 +43,7 @@ export function createTask(projectId: string, input: NewTaskInput): Task {
     editedAt: '',
     hintText: '',
     afterImages: [],
+    afterDocuments: [],
   };
 }
 
@@ -86,6 +88,7 @@ export function applyStatusFields(task: Task, fields: StatusFields): Task {
     editedAt: fields.editedAt,
     hintText: fields.hintText.trim(),
     afterImages: fields.afterImages,
+    afterDocuments: fields.afterDocuments,
     updatedAt: now,
   };
 }

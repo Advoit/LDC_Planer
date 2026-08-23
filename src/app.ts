@@ -6,19 +6,18 @@ import { renderTaskList } from './ui/task-list';
 import { openTaskForm } from './ui/task-form';
 import { openTaskDetail } from './ui/task-detail';
 import { openNewProjectFlow } from './ui/project-form';
-import { confirmDialog } from './ui/modal';
-import { openMaterialExportModal } from './ui/export-flow';
+import {
+  openMaterialExportModal,
+  openProjectExportModal,
+} from './ui/export-flow';
 import { showMergeOrOverwriteDialog, runMergeFlow } from './ui/merge-flow';
 import { openProjectDocumentsModal } from './ui/project-documents';
-import { openPrintWindow } from './ui/print';
 import { loadStoredProject, storeProject } from './core/storage';
 import { migrateProject } from './core/migrate';
 import { touchProject } from './domain/project';
 import { createTask } from './domain/task';
 import { buildProjectZip, projectZipFileName } from './io/export';
 import { parseProjectZip } from './io/import';
-import { buildProjectReport } from './io/project-export';
-import { canMergeProjects } from './domain/merge';
 import type { Project, Task } from './domain/types';
 
 const appEl = document.getElementById('app')!;
@@ -108,7 +107,7 @@ function buildToolbar(): HTMLElement {
   brand.appendChild(brandText);
   bar.appendChild(brand);
 
-  /* Aktionen */
+  /* Aktionen – gruppiert nach Bereich */
   const actions = el('div', { class: 'toolbar-actions' });
 
   const btn = (
@@ -126,23 +125,41 @@ function buildToolbar(): HTMLElement {
     return b;
   };
 
-  actions.appendChild(btn('Neues Projekt', 'folder', () => void handleNewProject()));
+  const group = (label: string, buttons: HTMLButtonElement[]): HTMLElement =>
+    el('div', { class: 'toolbar-group' }, [
+      el('span', { class: 'toolbar-group-label' }, [label]),
+      el('div', { class: 'toolbar-group-buttons' }, buttons),
+    ]);
+
+  /* ── Gruppe: Projektverwaltung ── */
   actions.appendChild(
-    btn('Speichern', 'download', () => void handleSave(), !project ? 'disabled' : ''),
+    group('Projekt', [
+      btn('Neues Projekt', 'folder-plus', () => void handleNewProject()),
+      btn('Speichern', 'download', () => void handleSave(), !project ? 'disabled' : ''),
+      btn('Laden', 'upload', () => void handleLoad()),
+    ]),
   );
-  actions.appendChild(btn('Laden', 'upload', () => void handleLoad()));
 
   if (project) {
-    actions.appendChild(btn('Unterlagen', 'paperclip', () => void handleProjectDocuments()));
-    actions.appendChild(btn('Projekt Export', 'file', () => void handleProjectExport()));
-    actions.appendChild(btn('Neue Aufgabe', 'plus', () => void handleNewTask(), 'primary'));
-    const editLabel = editMode ? 'Bearb. Ende' : 'Editieren';
-    const editExtra = editMode ? 'active' : '';
-    actions.appendChild(btn(editLabel, 'pencil', () => toggleEditMode(), editExtra));
+    /* ── Gruppe: Dokumente ── */
     actions.appendChild(
-      btn('Material Export', 'clipboard', () => {
-        if (project) void openMaterialExportModal(project);
-      }),
+      group('Dokumente', [
+        btn('Unterlagen', 'paperclip', () => void handleProjectDocuments()),
+        btn('Projekt Export', 'file-text', () => void handleProjectExport()),
+        btn('Material Export', 'clipboard', () => {
+          if (project) void openMaterialExportModal(project);
+        }),
+      ]),
+    );
+
+    /* ── Gruppe: Aufgaben ── */
+    const editLabel = editMode ? 'Fertig' : 'Editieren';
+    const editExtra = editMode ? 'active' : '';
+    actions.appendChild(
+      group('Aufgaben', [
+        btn('Neue Aufgabe', 'plus', () => void handleNewTask(), 'primary'),
+        btn(editLabel, editMode ? 'check' : 'pencil', () => toggleEditMode(), editExtra),
+      ]),
     );
   }
 
@@ -243,42 +260,22 @@ async function handleLoad(): Promise<void> {
     return;
   }
 
-  /* Projekt existiert bereits → Merge / Überschreiben */
-  if (canMergeProjects(project, imported)) {
-    const choice = await showMergeOrOverwriteDialog(true);
-    if (choice === 'cancel') return;
-    if (choice === 'overwrite') {
-      await setProject(imported);
-      showToast('Projekt überschrieben.', 'success');
-      return;
-    }
-    if (choice === 'merge') {
-      const merged = await runMergeFlow(project, imported);
-      if (merged) {
-        await setProject(merged);
-        showToast('Projekte zusammengeführt.', 'success');
-      }
-      return;
-    }
-  }
-
-  /* IDs stimmen nicht überein → kein Merge möglich */
-  const msg =
-    project.id !== imported.id
-      ? 'Die Projekt-IDs stimmen nicht überein. Eine Zusammenführung ist nicht möglich.'
-      : 'Ein Fehler ist aufgetreten.';
-  const overwrite = await confirmDialog({
-    title: 'Projekt laden',
-    message: `${msg} Möchten Sie das aktuelle Projekt überschreiben?`,
-    confirmLabel: 'Aktuelles Projekt überschreiben',
-    danger: true,
-  });
-  if (overwrite) {
+  /* Projekt existiert bereits → Merge / Überschreiben (auch bei anderer Projekt-ID) */
+  const choice = await showMergeOrOverwriteDialog(project, imported);
+  if (choice === 'cancel') return;
+  if (choice === 'overwrite') {
     await setProject(imported);
     showToast('Projekt überschrieben.', 'success');
+    return;
+  }
+  if (choice === 'merge') {
+    const merged = await runMergeFlow(project, imported);
+    if (merged) {
+      await setProject(merged);
+      showToast('Projekte zusammengeführt.', 'success');
+    }
   }
 }
-
 
 async function handleNewTask(): Promise<void> {
   if (!project) return;
@@ -303,8 +300,7 @@ async function handleProjectDocuments(): Promise<void> {
 
 function handleProjectExport(): void {
   if (!project) return;
-  const html = buildProjectReport(project);
-  openPrintWindow(html);
+  void openProjectExportModal(project);
 }
 
 async function handleEditTask(taskId: string): Promise<void> {

@@ -45,6 +45,7 @@ export interface ExportedTask {
   hintText: string;
   afterImages: ImageRef[];
   documents: DocumentRef[];
+  afterDocuments: DocumentRef[];
 }
 
 export interface DocumentRef {
@@ -163,6 +164,9 @@ export function buildProjectZip(project: Project): Blob {
       documents: (task.documents ?? []).map((doc) =>
         documentRef(doc, 'documents'),
       ),
+      afterDocuments: (task.afterDocuments ?? []).map((doc) =>
+        documentRef(doc, 'documents'),
+      ),
     };
     files[`${dir}/task.json`] = strToU8(JSON.stringify(exportedTask, null, 2));
 
@@ -178,6 +182,10 @@ export function buildProjectZip(project: Project): Blob {
       files[`${dir}/thumbnail.png`] = dataUrlToBytes(task.thumbnail);
     }
     for (const doc of task.documents ?? []) {
+      const ext = MIME_EXT[doc.mime.toLowerCase()] ?? extensionFromName(doc.name);
+      files[`${dir}/documents/${doc.id}${ext}`] = dataUrlToBytes(doc.dataUrl);
+    }
+    for (const doc of task.afterDocuments ?? []) {
       const ext = MIME_EXT[doc.mime.toLowerCase()] ?? extensionFromName(doc.name);
       files[`${dir}/documents/${doc.id}${ext}`] = dataUrlToBytes(doc.dataUrl);
     }

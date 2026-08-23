@@ -15,25 +15,24 @@ export interface MergeResult {
   merged: Project;
   conflicts: number; // Anzahl der aufgelösten Konflikte
   added: number; // Anzahl neu hinzugefügter Tasks (nur importiert)
-}
-
-/* ── Prüfung, ob Projekte zusammengeführt werden können ── */
-
-export function canMergeProjects(
-  local: Project | null,
-  imported: Project,
-): boolean {
-  return local !== null && local.id === imported.id;
+  sameId: boolean; // true, wenn beide Projekte dieselbe Projekt-ID hatten
 }
 
 /* ── Merge ── */
 
+/**
+ * Führt zwei Projekte zusammen.
+ * Bei unterschiedlicher Projekt-ID bleibt die lokale ID bestehen – die
+ * importierten Aufgaben werden angehängt und auf das lokale Projekt
+ * umgehängt (projectId wird angepasst).
+ */
 export async function mergeProjects(
   local: Project,
   imported: Project,
   resolve: (conflict: TaskConflict) => ConflictResolution | Promise<ConflictResolution>,
 ): Promise<MergeResult> {
   const now = new Date().toISOString();
+  const sameId = local.id === imported.id;
   let conflictCount = 0;
   let addedCount = 0;
 
@@ -42,24 +41,31 @@ export async function mergeProjects(
     const importedTask = imported.tasks.find((t) => t.id === localTask.id);
     if (!importedTask) return localTask;
 
-    /* Inhalt identisch? Dann lokales behalten und nur Bilder mergen. */
+    /* Inhalt identisch? Dann lokales behalten und nur Bilder/Dokumente mergen. */
     if (tasksContentEqual(localTask, importedTask)) {
-      return mergeTaskImages(localTask, importedTask);
+      return mergeTaskAssets(localTask, importedTask);
     }
 
-    /* Konflikt: Benutzer entscheidet per Modal. */      conflictCount++;
-      const choice = await resolve({ local: localTask, imported: importedTask });
+    /* Konflikt: Benutzer entscheidet per Modal. */
+    conflictCount++;
+    const choice = await resolve({ local: localTask, imported: importedTask });
 
     if (choice === 'imported') {
-      return mergeTaskImages(importedTask, localTask);
+      return {
+        ...mergeTaskAssets(importedTask, localTask),
+        projectId: local.id,
+      };
     }
-    return mergeTaskImages(localTask, importedTask);
+    return mergeTaskAssets(localTask, importedTask);
   }));
 
-  /* Nur im Import existierende Tasks hinzufügen */
+  /* Nur im Import existierende Tasks hinzufügen (auf lokale ID umhängen) */
   for (const importedTask of imported.tasks) {
     if (!local.tasks.some((t) => t.id === importedTask.id)) {
-      mergedTasks.push(importedTask);
+      mergedTasks.push({
+        ...importedTask,
+        projectId: local.id,
+      });
       addedCount++;
     }
   }
@@ -71,7 +77,12 @@ export async function mergeProjects(
     updatedAt: now,
   };
 
-  return { merged, conflicts: conflictCount, added: addedCount };
+  return {
+    merged,
+    conflicts: conflictCount,
+    added: addedCount,
+    sameId,
+  };
 }
 
 /* ── Aufgaben-Inhalte vergleichen (ohne Bilder) ── */
@@ -117,11 +128,13 @@ function mergeDocumentLists(
 
 /* ── Bilder mergen (Hash-Deduplizierung) ── */
 
-function mergeTaskImages(base: Task, other: Task): Task {
+function mergeTaskAssets(base: Task, other: Task): Task {
   return {
     ...base,
     images: mergeImageLists(base.images, other.images),
     afterImages: mergeImageLists(base.afterImages, other.afterImages),
+    documents: mergeDocumentLists(base.documents, other.documents),
+    afterDocuments: mergeDocumentLists(base.afterDocuments, other.afterDocuments),
   };
 }
 

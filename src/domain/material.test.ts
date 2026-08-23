@@ -23,6 +23,7 @@ function makeTask(id: string, material: { name: string; quantity: number; unit: 
     editedAt: '',
     hintText: '',
     afterImages: [],
+    afterDocuments: [],
     documents: [],
   };
 }

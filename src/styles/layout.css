@@ -43,9 +43,7 @@
   }
 
   .list-controls {
-    flex-direction: row;
-    align-items: center;
-    padding: var(--gap) var(--gap-lg);
+    padding: var(--gap) var(--gap-lg) var(--gap-sm);
   }
 
   .search-input {
