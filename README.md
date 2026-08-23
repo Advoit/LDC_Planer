@@ -1,66 +1,60 @@
 # LDC Planer
 
-Eine **offline-first PWA** zum Planen und Ausführen von Bau- und Sanierungsprojekten. Alle Daten bleiben lokal auf dem Gerät – es wird kein Server oder Backend benötigt.
+Eine **offline-first PWA** zum Planen und Ausführen von Bau- und Sanierungsprojekten. Alle Daten bleiben lokal auf dem Gerät (IndexedDB) – es wird kein Server oder Backend benötigt. Nach dem ersten Laden funktioniert die App vollständig offline.
 
-## Highlights
+## Funktionen im Überblick
 
-- 🔒 **100 % lokal** – Projekte, Bilder und Dokumente liegen ausschließlich in der IndexedDB des Browsers
-- 📱 **Installierbar** – als PWA auf Smartphone, Tablet und Desktop nutzbar, vollständig offline
-- 🗜️ **Sichern & Zusammenführen** – Projekt als ZIP exportieren, später laden oder per Aufgaben-ID zusammenführen
-- 📋 **Aufgaben** – mit Status (Offen/Hinweis/Behoben), Vorher-/Nachher-Bildern, Material und Arbeitsaufwand
-- 📄 **Exporte** – Materialliste und komplettes Projekt als druckbares PDF
-- 📎 **Unterlagen** – Pläne und Dokumente projekt- oder aufgabenbezogen verwalten
-
-## Funktionen
-
-| Bereich | Details |
+| Bereich | Funktionen |
 | --- | --- |
-| Projekt | Name, Ort, Beschreibung, individuelle Projekt-ID (8 Zeichen) |
-| Sichern | Export als `.zip` mit sauberer Ordnerstruktur (JSON + Bilder + Dokumente) |
-| Laden | ZIP importieren, bei gleicher ID zusammenführen oder überschreiben |
-| Zusammenführen | Konfliktlösung pro Aufgabe, Deduplizierung per SHA-256-Hash |
-| Aufgaben | Bilder mit Thumbnail-Picker, Material mit Intellisense, geplanter Aufwand (hh:mm) |
-| Übersicht | Suche, Filter (Offen/Hinweis/Behoben), Sortierung, 60×60-Vorschauen |
-| Status | Offen → Hinweis → Behoben mit Pflichtfeldern „Bearbeitet von“/„Bearbeitet am“ |
-| Material | Druck als Aufgabenliste oder summierte Gesamtliste |
-| PDF | Gesamtes Projekt als strukturierter Bericht |
-| Unterlagen | Dateien projekt- oder aufgabenbezogen hochladen und herunterladen |
+| **Projekte** | Neues Projekt mit Name, Ort und Beschreibung; individuelle 8-stellige Projekt-ID |
+| **Aufgaben** | Vorher-/Nachher-Bilder, Dokumente, Material mit Intellisense, geplanter Arbeitsaufwand (hh:mm) und Personalbedarf |
+| **Status** | Offen → Hinweis → Behoben mit Pflichtfeldern („Bearbeitet von“, „Bearbeitet am“, Hinweistext) |
+| **Übersicht** | Aufklappbare Suche & Filter, Sortierung nach Name, Status oder Zeitaufwand |
+| **Unterlagen** | Pläne und Dokumente projekt- oder aufgabenbezogen, mit Web-Vorschau (PDF, Bilder, Text) |
+| **Sichern & Laden** | Projekt als ZIP exportieren, später laden, zusammenführen oder überschreiben |
+| **Exporte** | Projektbericht und Materialliste als PDF |
 
-## Tech-Stack
+## Nutzungsanleitung
 
-- **TypeScript** (strict) + **Vite**
-- **Vanilla JS** – kein Framework
-- **IndexedDB** – lokale, offline-fähige Speicherung
-- **vite-plugin-pwa** – PWA-Support (autoUpdate)
-- **fflate** – ZIP-Erzeugung und -Entpacken
-- **Vitest** – Unit-Tests (Merge, Migration, Material, Roundtrip)
+### Projekt anlegen und verwalten
 
-## Schnellstart
+1. **Neues Projekt**: In der Leiste unter **Projekt → Neues Projekt** anlegen (Name und Ort sind Pflicht). Beim Anlegen eines neuen Projekts werden vorhandene Daten entfernt – es erscheint eine Sicherheitsabfrage.
+2. **Speichern**: Das Projekt wird automatisch lokal gespeichert. Zusätzlich kann es unter **Projekt → Speichern** als ZIP-Datei heruntergeladen werden (Sicherung).
+3. **Laden**: Unter **Projekt → Laden** eine gesicherte ZIP-Datei importieren. Ist bereits ein Projekt geöffnet, kann man **Zusammenführen** oder **Überschreiben** wählen – auch bei unterschiedlicher Projekt-ID ist das Zusammenführen möglich (die Import-ID geht dabei verloren, nur die Aufgaben werden angehängt).
 
-```bash
-npm install     # Abhängigkeiten installieren
-npm run dev     # Dev-Server starten → http://localhost:5173
-npm run build   # Typecheck + Production-Build nach dist/
-npm test        # Tests ausführen
-```
+### Aufgaben erstellen und bearbeiten
 
-## Deployment auf GitHub Pages
+- **Neue Aufgabe** unter **Aufgaben → Neue Aufgabe**:
+  - Name und Beschreibung (Pflicht)
+  - **Vorher-Bilder** hochladen (antippen zum Vergrößern), eines davon als Vorschau-Bild wählen
+  - **Dokumente** (Pläne, Anhänge) hinzufügen
+  - **Material** mit Intellisense: Bekannte Artikel aus anderen Aufgaben werden mit der zuletzt verwendeten Einheit vorgeschlagen
+  - **Geplanter Arbeitsaufwand** (hh:mm, optional) und **Personalbedarf** (Anzahl Personen, Standard: 1)
+- **Bearbeiten**: In der Leiste **Aufgaben → Editieren** aktivieren, dann erscheint an jeder Aufgabe ein Bleistift. Aufgaben lassen sich bearbeiten oder löschen.
 
-Ein Push auf `main` baut die App automatisch und veröffentlicht sie über den GitHub-Actions-Workflow (`.github/workflows/deploy.yml`).
+### Status einer Aufgabe verwalten
 
-**Einmalige Einrichtung:**
+Eine Aufgabe in der Übersicht antippen, um die Detailansicht zu öffnen:
 
-1. Repository anlegen und Code auf `main` pushen
-2. In den Repo-Settings unter **Pages → Build and deployment** die Quelle **„GitHub Actions“** auswählen
-3. Den Workflow über **Actions → „Deploy to GitHub Pages“** starten
+- **Offen → Hinweis**: „Bearbeitet von“ und „Bearbeitet am“ sind Pflicht, zusätzlich muss ein **Hinweistext** angegeben werden. Optional können **Nachher-Bilder** und **Nachher-Dokumente** hochgeladen werden.
+- **Hinweis → Behoben** (oder direkt Offen → Behoben): „Bearbeitet von“ und „Bearbeitet am“ sind Pflicht.
 
-Die App ist danach unter `https://<BENUTZER>.github.io/<REPO>/` erreichbar. Zum Offline-Nutzen einfach „Zum Home-Bildschirm hinzufügen“ wählen.
+### Unterlagen verwalten
 
-> **Hinweis:** GitHub Pages erfordert ein öffentliches Repository (bei privaten Repos ein kostenpflichtiger Plan).
+- **Projektbezogene Unterlagen** (z. B. Pläne, Genehmigungen) unter **Dokumente → Unterlagen**.
+- **Aufgabenbezogene Dokumente** direkt beim Erstellen/Bearbeiten einer Aufgabe.
+- Dokumente lassen sich per **Web-Vorschau** (PDF, Bilder, Text) öffnen oder herunterladen.
+
+### Exporte als PDF
+
+- **Projektbericht** unter **Dokumente → Projekt Export**: Enthält Deckblatt, Inhaltsverzeichnis, Projektinformationen, Unterlagen und alle ausgewählten Aufgaben (Status wählbar, Standard: alle). Beschreibung, Material, Hinweise sowie Vorher-/Nachher-Bilder werden mit exportiert.
+- **Materialliste** unter **Dokumente → Material Export**: Nach Aufgaben gruppiert oder als summierte Gesamtliste (nach Name + Einheit). Abgeschlossene Aufgaben können wahlweise einbezogen werden.
+
+Die Exporte werden als echte PDF-Dateien heruntergeladen – es öffnet sich kein neues Fenster.
 
 ## Projektdatei-Format
 
-Eine Projektdatei ist eine `.zip` mit folgender Struktur:
+Eine Sicherung ist eine `.zip` mit folgender Struktur:
 
 ```
 LDC-Projekt-<PROJEKT-ID>/
@@ -74,7 +68,18 @@ LDC-Projekt-<PROJEKT-ID>/
         └── documents/        # Aufgaben-Dokumente
 ```
 
-Bilder und Dokumente werden per **SHA-256-Hash** dedupliziert – beim Zusammenführen werden identische Dateien übersprungen, unterschiedliche angehängt.
+Bilder und Dokumente werden per **SHA-256-Hash** dedupliziert – beim Zusammenführen werden identische Dateien übersprungen, unterschiedliche angehängt. Alte Sicherungen (`.ldcproj`) bleiben ladbar.
+
+## Entwicklung
+
+**Tech-Stack:** TypeScript (strict) · Vite · Vanilla JS (kein Framework) · IndexedDB · vite-plugin-pwa (autoUpdate) · fflate (ZIP) · pdf-lib (PDF-Export) · Vitest
+
+```bash
+npm install     # Abhängigkeiten installieren
+npm run dev     # Dev-Server starten → http://localhost:5173
+npm run build   # Typecheck + Production-Build nach dist/
+npm test        # Tests ausführen
+```
 
 ## Lizenz
 

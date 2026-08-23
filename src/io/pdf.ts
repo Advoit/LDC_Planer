@@ -26,6 +26,7 @@ export const COLORS = {
   blue: rgb(0, 0.48, 1),
   orange: rgb(1, 0.58, 0),
   green: rgb(0.2, 0.78, 0.35),
+  white: rgb(1, 1, 1),
 };
 
 export function statusColor(status: string): ReturnType<typeof rgb> {
@@ -383,28 +384,12 @@ function loadImageElement(dataUrl: string): Promise<HTMLImageElement> {
   });
 }
 
-function roundRectPath(
-  g: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-): void {
-  g.beginPath();
-  g.moveTo(x + r, y);
-  g.arcTo(x + w, y, x + w, y + h, r);
-  g.arcTo(x + w, y + h, x, y + h, r);
-  g.arcTo(x, y + h, x, y, r);
-  g.arcTo(x, y, x + w, y, r);
-  g.closePath();
-}
-
 /**
- * Bettet das App-Logo (dataURL) als „App-Icon“ ein: helles Logo auf
- * blauem, abgerundetem Quadrat (wie das PWA-Icon). Nur im Browser möglich.
+ * Bettet ein Logo (dataURL) transparent ein (ohne Hintergrund/Rahmen),
+ * damit es direkt auf farbigen Flächen platziert werden kann.
+ * Nur im Browser möglich.
  */
-export async function embedBrandImage(
+export async function embedTransparentImage(
   ctx: PdfContext,
   dataUrl: string,
   maxWidth: number,
@@ -422,15 +407,12 @@ export async function embedBrandImage(
     const g = canvas.getContext('2d');
     if (!g) return null;
 
-    /* Blauer, abgerundeter Hintergrund + Logo mittig */
-    roundRectPath(g, 0, 0, size, size, 56);
-    g.fillStyle = '#007AFF';
-    g.fill();
-    const pad = 40;
+    /* Nur das Logo zeichnen – Hintergrund bleibt transparent */
+    const pad = 28;
     g.drawImage(img, pad, pad, size - pad * 2, size - pad * 2);
 
-    const jpeg = canvas.toDataURL('image/jpeg', 0.9);
-    const image = await ctx.doc.embedJpg(dataUrlToBytes(jpeg));
+    const png = canvas.toDataURL('image/png');
+    const image = await ctx.doc.embedPng(dataUrlToBytes(png));
     const scaled = image.scaleToFit(maxWidth, maxHeight);
     return { image, width: scaled.width, height: scaled.height };
   } catch {

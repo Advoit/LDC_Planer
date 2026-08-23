@@ -12,7 +12,7 @@ import {
   drawCenteredParagraph,
   drawTable,
   embedImage,
-  embedBrandImage,
+  embedTransparentImage,
   drawImage,
   finalizePdf,
   formatDate,
@@ -55,31 +55,41 @@ async function fetchLogoDataUrl(): Promise<string | null> {
 }
 
 async function drawCover(ctx: PdfContext, project: Project, now: string): Promise<void> {
-  ctx.y = PAGE_HEIGHT - 160;
+  /* Blauer Briefkopf über die volle Breite */
+  const bandH = 110;
+  ctx.page.drawRectangle({
+    x: 0,
+    y: PAGE_HEIGHT - bandH,
+    width: PAGE_WIDTH,
+    height: bandH,
+    color: COLORS.blue,
+  });
 
-  /* Logo (App-Icon, zentriert) */
+  /* Logo oben rechts – ohne Umrandung, direkt auf dem Briefkopf */
   const logoDataUrl = await fetchLogoDataUrl();
   const logo = logoDataUrl
-    ? await embedBrandImage(ctx, logoDataUrl, 84, 84)
+    ? await embedTransparentImage(ctx, logoDataUrl, 84, 84)
     : null;
   if (logo) {
-    ensureSpace(ctx, logo.height + 24);
     ctx.page.drawImage(logo.image, {
-      x: MARGIN + (CONTENT_WIDTH - logo.width) / 2,
-      y: ctx.y - logo.height,
+      x: PAGE_WIDTH - MARGIN - logo.width,
+      y: PAGE_HEIGHT - bandH + (bandH - logo.height) / 2,
       width: logo.width,
       height: logo.height,
     });
-    ctx.y -= logo.height + 20;
   }
 
-  /* Kicker */
-  drawCentered(ctx, 'LDC PLANER', {
-    size: 12,
+  /* Wortmarke links im Briefkopf */
+  ctx.page.drawText('LDC Planer', {
+    x: MARGIN,
+    y: PAGE_HEIGHT - bandH + (bandH - 16) / 2 + 4,
+    size: 16,
     font: ctx.bold,
-    color: COLORS.blue,
+    color: COLORS.white,
   });
-  ctx.y -= 8;
+
+  /* Inhalt unterhalb des Briefkopfs */
+  ctx.y = PAGE_HEIGHT - bandH - 44;
 
   /* Projektname */
   drawCenteredParagraph(ctx, project.name, {
@@ -161,8 +171,9 @@ async function drawCover(ctx: PdfContext, project: Project, now: string): Promis
   }
 
   /* Fußbereich des Deckblatts */
-  ctx.page.drawText(`Exportiert am ${now}  ·  LDC Planer`, {
-    x: MARGIN + (CONTENT_WIDTH - ctx.font.widthOfTextAtSize(`Exportiert am ${now}  ·  LDC Planer`, 9)) / 2,
+  const foot = `Exportiert am ${now}  ·  LDC Planer`;
+  ctx.page.drawText(foot, {
+    x: MARGIN + (CONTENT_WIDTH - ctx.font.widthOfTextAtSize(foot, 9)) / 2,
     y: 36,
     size: 9,
     font: ctx.font,
@@ -257,32 +268,32 @@ function documentLine(ctx: PdfContext, doc: ProjectDocument): void {
   ctx.y -= 14;
 }
 
+/** Abschnitts-Überschrift mit Trennlinie darüber (für jeden Hauptpunkt). */
+function drawSectionHeading(ctx: PdfContext, label: string): void {
+  ensureSpace(ctx, 44);
+  drawHLine(ctx);
+  ctx.y -= 4;
+  drawText(ctx, label, { size: 14, font: ctx.bold });
+  ctx.y -= 8;
+}
+
 function documentList(
   ctx: PdfContext,
   documents: ProjectDocument[],
   label: string,
-  heading = false,
 ): void {
   if (documents.length === 0) return;
-  if (heading) {
-    /* Abschnitts-Überschrift (z. B. „Unterlagen“) */
-    ensureSpace(ctx, 30);
-    drawText(ctx, label, { size: 14, font: ctx.bold });
-    ctx.y -= 8;
-  } else {
-    /* Kleine Unter-Überschrift (z. B. „Dokumente“ einer Aufgabe) */
-    ensureSpace(ctx, 18);
-    ctx.page.drawRectangle({
-      x: MARGIN,
-      y: ctx.y - 2,
-      width: CONTENT_WIDTH,
-      height: 16,
-      color: COLORS.headerBg,
-    });
-    drawText(ctx, label, { size: 9.5, font: ctx.bold, color: COLORS.secondary });
-  }
+  ensureSpace(ctx, 18);
+  ctx.page.drawRectangle({
+    x: MARGIN,
+    y: ctx.y - 2,
+    width: CONTENT_WIDTH,
+    height: 16,
+    color: COLORS.headerBg,
+  });
+  drawText(ctx, label, { size: 9.5, font: ctx.bold, color: COLORS.secondary });
   for (const doc of documents) documentLine(ctx, doc);
-  ctx.y -= heading ? 14 : 6;
+  ctx.y -= 6;
 }
 
 /* ═════════════ Bilder (bis zu 2 pro Reihe) ═════════════ */
@@ -291,9 +302,11 @@ async function imageBlock(
   ctx: PdfContext,
   label: string,
   images: { dataUrl: string }[],
+  spaceBefore = 0,
 ): Promise<void> {
   if (images.length === 0) return;
-  ensureSpace(ctx, 18);
+  ensureSpace(ctx, 18 + spaceBefore);
+  ctx.y -= spaceBefore;
   drawText(ctx, label, { size: 9.5, font: ctx.bold, color: COLORS.secondary });
 
   const maxWidth = (CONTENT_WIDTH - 8) / 2;
@@ -362,21 +375,23 @@ async function taskSection(ctx: PdfContext, task: Task): Promise<number> {
     12.5,
     CONTENT_WIDTH - statusW - 24,
   );
+  /* Titel & Status vertikal zentriert im grauen Kasten */
   ctx.page.drawText(shownName, {
     x: MARGIN - 2,
-    y: rectBottom + 17,
+    y: rectBottom + 12,
     size: 12.5,
     font: ctx.bold,
     color: COLORS.text,
   });
   ctx.page.drawText(statusLabel, {
     x: MARGIN + CONTENT_WIDTH - statusW,
-    y: rectBottom + 18,
+    y: rectBottom + 12.5,
     size: 10,
     font: ctx.bold,
     color: statusColor(task.status),
   });
-  ctx.y = rectBottom - 8;
+  /* Etwas mehr Abstand zur darunter liegenden Zeile */
+  ctx.y = rectBottom - 13;
 
   /* Beschreibung */
   drawParagraph(ctx, task.description, {
@@ -424,7 +439,7 @@ async function taskSection(ctx: PdfContext, task: Task): Promise<number> {
   }
 
   await imageBlock(ctx, 'Vorher-Bilder', task.images);
-  await imageBlock(ctx, 'Nachher-Bilder', task.afterImages);
+  await imageBlock(ctx, 'Nachher-Bilder', task.afterImages, 10);
   documentList(ctx, task.documents, 'Dokumente');
   documentList(ctx, task.afterDocuments, 'Nachher-Dokumente');
   /* Klarer Abstand zur nächsten Aufgabe */
@@ -455,9 +470,8 @@ export async function buildProjectPdf(
   const contentStartPage = ctx.doc.getPageCount(); // 2
 
   /* ── Abschnitt: Projektinformationen ── */
-  ensureSpace(ctx, 90);
-  drawText(ctx, 'Projektinformationen', { size: 14, font: ctx.bold });
-  ctx.y -= 4;
+  drawSectionHeading(ctx, 'Projektinformationen');
+  ctx.y -= 2;
   drawText(ctx, project.name, { size: 13, font: ctx.bold });
   if (project.location) {
     drawText(ctx, project.location, { size: 11, color: COLORS.secondary });
@@ -474,17 +488,19 @@ export async function buildProjectPdf(
     size: 9.5,
     color: COLORS.tertiary,
   });
-  ctx.y -= 10;
-  drawHLine(ctx);
+  ctx.y -= 6;
 
   /* ── Abschnitt: Unterlagen ── */
-  documentList(ctx, project.documents ?? [], 'Unterlagen', true);
+  if ((project.documents ?? []).length > 0) {
+    drawSectionHeading(ctx, 'Unterlagen');
+    for (const doc of project.documents ?? []) documentLine(ctx, doc);
+    ctx.y -= 4;
+  }
 
   /* ── Abschnitt: Aufgaben ── */
-  ensureSpace(ctx, 34);
-  drawText(ctx, 'Aufgaben', { size: 14, font: ctx.bold });
+  drawSectionHeading(ctx, 'Aufgaben');
   /* Abstand zur ersten Aufgabe, damit der Titelblock nichts überdeckt */
-  ctx.y -= 16;
+  ctx.y -= 6;
 
   const tocEntries: TocEntry[] = [
     { prefix: '1.', label: 'Projektinformationen', page: contentStartPage + 1 },
