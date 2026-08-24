@@ -457,6 +457,13 @@
   gap: 8px;
 }
 
+.cover-termin-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+
 /* ═══════════════════ Image-Upload ═══════════════════ */
 
 .image-grid {

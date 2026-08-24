@@ -239,6 +239,32 @@ export function openInstandsetzungsreportModal(
     name: 'termin',
     value: saved.termin ?? today,
   }) as HTMLInputElement;
+  /* „Unbekannt“: kein Datum – im Report erscheint „XX.XX.<aktuelles Jahr>“ */
+  const terminUnknown = el('input', {
+    type: 'checkbox',
+    name: 'terminUnbekannt',
+    checked: saved.termin === '' ? 'true' : null,
+  }) as HTMLInputElement;
+  function updateTerminField(): void {
+    if (terminUnknown.checked) {
+      termin.value = '';
+      termin.disabled = true;
+    } else {
+      termin.disabled = false;
+      if (!termin.value) termin.value = today;
+    }
+  }
+  terminUnknown.addEventListener('change', updateTerminField);
+  updateTerminField();
+
+  const terminField = el('div', { class: 'cover-field' });
+  terminField.appendChild(el('label', { class: 'field-label' }, ['Ausführungstermin']));
+  const terminRow = el('div', { class: 'cover-termin-row' });
+  terminRow.appendChild(termin);
+  terminRow.appendChild(
+    el('label', { class: 'checkbox-row' }, [terminUnknown, ' Unbekannt']),
+  );
+  terminField.appendChild(terminRow);
 
   const content = el('div', { class: 'export-form' }, [
     el('p', { class: 'export-hint' }, [
@@ -249,7 +275,7 @@ export function openInstandsetzungsreportModal(
     coverField('Straße + Hausnummer', strasse),
     coverField('PLZ + Ort', plzOrt),
     coverField('Leitende EFK (Name)', efkName),
-    coverField('Ausführungstermin', termin),
+    terminField,
   ]);
 
   return new Promise<ReportCover | null>((resolve) => {
@@ -279,7 +305,8 @@ export function openInstandsetzungsreportModal(
               strasse: strasse.value.trim(),
               plzOrt: plzOrt.value.trim(),
               efkName: efkName.value.trim(),
-              termin: termin.value,
+              /* Unbekannt → leeres Datum (Report zeigt „XX.XX.<Jahr>“) */
+              termin: terminUnknown.checked ? '' : termin.value,
             };
             /* Lokale Vorgabe weiterhin merken (Fallback für Projekte ohne eigene
                Einstellungen) – die Einstellungen liegen jetzt im Projekt. */

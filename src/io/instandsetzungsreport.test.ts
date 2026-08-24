@@ -409,6 +409,17 @@ describe('buildInstandsetzungsreportPptx', () => {
     expectWellFormed(new TextDecoder().decode(files['ppt/slides/slide3.xml']));
   });
 
+  it('zeigt bei unbekanntem Ausführungstermin „XX.XX.<aktuelles Jahr>“ auf dem Deckblatt', async () => {
+    const project = makeProject([makeTask('T1', { position: '1' })]);
+    const bytes = await buildInstandsetzungsreportPptx(project, {
+      cover: { ...COVER, termin: '' },
+    });
+    const files = unzipSync(bytes);
+    const slide1 = new TextDecoder().decode(files['ppt/slides/slide1.xml']);
+    const year = new Date().getFullYear();
+    expect(slide1).toContain(`Ausführungstermin:\tXX.XX.${year}`);
+  });
+
   it('behält nur das Deckblatt, wenn keine Mängel-Aufgaben existieren', async () => {
     const project = makeProject([makeTask('TU', { typ: 'umbau' })]);
     const bytes = await buildInstandsetzungsreportPptx(project, { cover: COVER });

@@ -234,9 +234,15 @@ function buildCoverSlide(template: string, cover: InstandsetzungsreportCover): s
   xml = replaceRun(
     xml,
     '<a:t>Ausführungstermin:\t[Datum]</a:t>',
-    textRun(`Ausführungstermin:\t${cover.termin}`),
+    textRun(`Ausführungstermin:\t${formatCoverTermin(cover.termin)}`),
   );
   return xml;
+}
+
+/** Formatiert den Ausführungstermin: „unbekannt“ (leer) → „XX.XX.<aktuelles Jahr>“. */
+function formatCoverTermin(termin: string): string {
+  if (termin.trim()) return termin;
+  return `XX.XX.${new Date().getFullYear()}`;
 }
 
 /* ═══════════════════ Reportseite ═══════════════════ */
