@@ -157,12 +157,17 @@ export function openTaskDetail(opts: {
 
   /* Dynamische Pflichtfelder */
   const hintLabel = statusSection.querySelector('.hint-label')!;
+  /* Hinweistext: Pflicht bei „Hinweis“, bei Mängel-Aufgaben auch bei „Behoben“ */
+  const isMaengelTask = task.typ === 'maengel';
   function updateRequiredFields(): void {
     const s = statusSelect.value as TaskStatus;
     const needFields = s !== 'offen';
     editedByInput.required = needFields;
     editedAtInput.required = needFields;
-    hintLabel.classList.toggle('required', s === 'hinweis');
+    hintLabel.classList.toggle(
+      'required',
+      s === 'hinweis' || (s === 'behoben' && isMaengelTask),
+    );
   }
   statusSelect.addEventListener('change', updateRequiredFields);
   updateRequiredFields();
@@ -195,7 +200,7 @@ export function openTaskDetail(opts: {
             afterImages: afterImages.getImages(),
             afterDocuments: afterDocs.getDocuments(),
           };
-          const err = validateStatusFields(fields);
+          const err = validateStatusFields(fields, task.typ);
           if (err) {
             showToast(err, 'error');
             return;

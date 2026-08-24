@@ -90,9 +90,13 @@ export function normalizePersonnel(value: number | undefined | null): number {
 /**
  * Validiert einen Statuswechsel gemäß den Regeln:
  * - Offen → Hinweis: „Bearbeitet von“, „Bearbeitet am“ und „Hinweistext“ Pflicht
- * - → Behoben (aus Offen oder Hinweis): „Bearbeitet von“, „Bearbeitet am“ Pflicht
+ * - → Behoben (aus Offen oder Hinweis): „Bearbeitet von“, „Bearbeitet am“ Pflicht;
+ *   bei Mängel-Aufgaben ist zusätzlich der „Hinweistext“ Pflicht (wie bei „Hinweis“)
  */
-export function validateStatusFields(fields: StatusFields): string | null {
+export function validateStatusFields(
+  fields: StatusFields,
+  taskTyp?: TaskTyp,
+): string | null {
   const { status, editedBy, editedAt, hintText } = fields;
 
   if (status === 'offen') {
@@ -103,8 +107,12 @@ export function validateStatusFields(fields: StatusFields): string | null {
   if (!editedBy.trim()) return 'Bitte „Bearbeitet von“ angeben.';
   if (!editedAt) return 'Bitte „Bearbeitet am“ angeben.';
 
-  if (status === 'hinweis' && !hintText.trim()) {
-    return 'Beim Status „Hinweis“ muss ein Hinweistext angegeben werden.';
+  const needsHint =
+    status === 'hinweis' || (status === 'behoben' && taskTyp === 'maengel');
+  if (needsHint && !hintText.trim()) {
+    return status === 'hinweis'
+      ? 'Beim Status „Hinweis“ muss ein Hinweistext angegeben werden.'
+      : 'Beim Status „Behoben“ muss bei Mängel-Aufgaben ein Hinweistext angegeben werden.';
   }
 
   return null;

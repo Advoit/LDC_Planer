@@ -13,7 +13,7 @@ Eine **offline-first PWA** zum Planen und Ausführen von Bau- und Sanierungsproj
 | **Übersicht** | Aufklappbare Suche & Filter (Status + Typ Mängel/Umbau), Sortierung nach Name, Status, Zeitaufwand, Art oder Position |
 | **Unterlagen** | Pläne und Dokumente projekt- oder aufgabenbezogen, mit Web-Vorschau (PDF, Bilder, Text) |
 | **Sichern & Laden** | Projekt als ZIP exportieren, später laden, zusammenführen oder überschreiben |
-| **Exporte** | Projektbericht und Materialliste als PDF, **Mängelreport als PPTX** (wie die Vorlage) |
+| **Exporte** | Projektbericht und Materialliste als PDF, **Instandsetzungsreport als PPTX** (wie die Vorlage) |
 
 ## Nutzungsanleitung
 
@@ -40,7 +40,7 @@ Eine **offline-first PWA** zum Planen und Ausführen von Bau- und Sanierungsproj
 Eine Aufgabe in der Übersicht antippen, um die Detailansicht zu öffnen:
 
 - **Offen → Hinweis**: „Bearbeitet von“ und „Bearbeitet am“ sind Pflicht, zusätzlich muss ein **Hinweistext** angegeben werden. Optional können **Nachher-Bilder** und **Nachher-Dokumente** hochgeladen werden.
-- **Hinweis → Behoben** (oder direkt Offen → Behoben): „Bearbeitet von“ und „Bearbeitet am“ sind Pflicht.
+- **Hinweis → Behoben** (oder direkt Offen → Behoben): „Bearbeitet von“ und „Bearbeitet am“ sind Pflicht. Bei **Mängel-Aufgaben** ist zusätzlich ein **Hinweistext** Pflicht (wie beim Status „Hinweis“).
 
 ### Unterlagen verwalten
 
@@ -50,7 +50,7 @@ Eine Aufgabe in der Übersicht antippen, um die Detailansicht zu öffnen:
 
 ### Exporte
 
-- **Mängelreport** unter **Dokumente → Mängelreport**: Erstellt eine **PPTX-Datei auf Basis der Vorlage** (`Mängelsreport.pptx`, Seite 1 = Deckblatt, ab Seite 2 eine Reportseite pro Mängel). Es öffnet sich zuerst das Fenster **„Deckblatt Einstellungen“** für Kennung, Saal, Straße, PLZ/Ort, Leitende EFK und Ausführungstermin (Eingaben werden gemerkt). Die Mängel werden **nach Position sortiert** übernommen, inkl. Material, Prüfung, Fehlerbeschreibung und Hinweis zur Behebung. Fotos werden in den beiden Foto-Kacheln der Vorlage platziert: **oben die Vorher-Bilder, unten die Nachher-Bilder** (je bis zu 4) – in jeder Kachel als Raster (1 Bild groß, 2 nebeneinander, 3 als 2+1, 4 als 2×2-Quadrat) – ohne dass die Reportseite mehr Platz braucht.
+- **Instandsetzungsreport** unter **Dokumente → Instandsetzungsreport**: Erstellt eine **PPTX-Datei auf Basis der Vorlage** (`Instandsetzungsreport.pptx`, Seite 1 = Deckblatt, ab Seite 2 eine Reportseite pro Mängel). Es öffnet sich zuerst das Fenster **„Deckblatt Einstellungen“** für Kennung, Saal, Straße, PLZ/Ort, Leitende EFK und Ausführungstermin (Eingaben werden gemerkt). Die Mängel werden **nach Position sortiert** übernommen, inkl. Material, Prüfung, Fehlerbeschreibung und Hinweis zur Behebung (dahinter steht die Aufgaben-Beschreibung; der Hinweistext der Aufgabe füllt das Textfeld unten rechts). Fotos werden in den beiden Foto-Kacheln der Vorlage platziert: **oben die Vorher-Bilder, unten die Nachher-Bilder** (je bis zu 4) – in jeder Kachel als Raster (1 Bild groß, 2 nebeneinander, 3 als 2+1, 4 als 2×2-Quadrat) – ohne dass die Reportseite mehr Platz braucht.
 - **Projektbericht** unter **Dokumente → Projekt Export**: Enthält Deckblatt, Inhaltsverzeichnis, Projektinformationen, Unterlagen und alle ausgewählten Aufgaben (Status wählbar, Standard: alle). Beschreibung, Material, Hinweise sowie Vorher-/Nachher-Bilder werden mit exportiert.
 - **Materialliste** unter **Dokumente → Material Export**: Nach Aufgaben gruppiert oder als summierte Gesamtliste (nach Name + Einheit). Abgeschlossene Aufgaben können wahlweise einbezogen werden.
 
@@ -84,7 +84,7 @@ npm run dev     # Dev-Server starten → http://localhost:5173
 npm run build   # Typecheck + Production-Build nach dist/
 npm test        # Tests ausführen
 
-npm run embed:mangels   # nach Änderungen an Mängelsreport.pptx (Vorlage neu einbetten)
+npm run embed:instandsetzungs   # nach Änderungen an Instandsetzungsreport.pptx (Vorlage neu einbetten)
 ```
 
 ## Lizenz

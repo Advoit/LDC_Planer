@@ -10,10 +10,10 @@ import type { MaterialReportOptions } from '../io/material-export';
 import { buildProjectPdf, projectReportFileName } from '../io/project-export';
 import type { ProjectExportOptions } from '../io/project-export';
 import {
-  buildMangelsreportPptx,
-  mangelsreportFileName,
-} from '../io/mangelsreport';
-import type { MangelsreportCover } from '../io/mangelsreport';
+  buildInstandsetzungsreportPptx,
+  instandsetzungsreportFileName,
+} from '../io/instandsetzungsreport';
+import type { InstandsetzungsreportCover } from '../io/instandsetzungsreport';
 import { TASK_STATUSES, STATUS_LABELS } from '../domain/types';
 import type { Project, TaskStatus } from '../domain/types';
 
@@ -169,7 +169,7 @@ export function openProjectExportModal(project: Project): Promise<void> {
   });
 }
 
-/* ═════════════════ Mängelreport (PPTX) ═════════════════ */
+/* ═════════════════ Instandsetzungsreport (PPTX) ═════════════════ */
 
 function coverField(label: string, input: HTMLInputElement): HTMLElement {
   const wrap = el('div', { class: 'cover-field' });
@@ -178,12 +178,15 @@ function coverField(label: string, input: HTMLInputElement): HTMLElement {
   return wrap;
 }
 
-/** „Deckblatt Einstellungen“ – erstellt den Mängelreport als PPTX. */
-export function openMangelsreportModal(project: Project): Promise<void> {
-  const saved = getPreference<Partial<MangelsreportCover>>(
-    'mangelsreport.cover',
-    {},
-  );
+/** „Deckblatt Einstellungen“ – erstellt den Instandsetzungsreport als PPTX. */
+export function openInstandsetzungsreportModal(project: Project): Promise<void> {
+  /* „mangelsreport.cover“ bleibt aus Abwärtskompatibilität lesbar */
+  const saved =
+    getPreference<Partial<InstandsetzungsreportCover>>(
+      'instandsetzungsreport.cover',
+      {},
+    ) ||
+    getPreference<Partial<InstandsetzungsreportCover>>('mangelsreport.cover', {});
   const today = new Date().toISOString().slice(0, 10);
 
   const maengelCount = project.tasks.filter(
@@ -258,14 +261,14 @@ export function openMangelsreportModal(project: Project): Promise<void> {
           },
         },
         {
-          label: 'Mängelreport erstellen',
+          label: 'Instandsetzungsreport erstellen',
           kind: 'primary',
           onClick: async () => {
             if (maengelCount === 0) {
               showToast('Keine Mängel-Aufgaben vorhanden.', 'error');
               return;
             }
-            const cover: MangelsreportCover = {
+            const cover: InstandsetzungsreportCover = {
               kennung: kennung.value.trim(),
               saal: saal.value.trim(),
               strasse: strasse.value.trim(),
@@ -273,20 +276,20 @@ export function openMangelsreportModal(project: Project): Promise<void> {
               efkName: efkName.value.trim(),
               termin: termin.value,
             };
-            setPreference('mangelsreport.cover', cover);
+            setPreference('instandsetzungsreport.cover', cover);
             handle.close();
-            showToast('Mängelreport wird erstellt…', 'info');
+            showToast('Instandsetzungsreport wird erstellt…', 'info');
             try {
-              const bytes = await buildMangelsreportPptx(project, { cover });
+              const bytes = await buildInstandsetzungsreportPptx(project, { cover });
               downloadBlob(
                 new Blob([bytes.slice()], {
                   type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
                 }),
-                mangelsreportFileName(project),
+                instandsetzungsreportFileName(project),
               );
-              showToast('Mängelreport als PPTX exportiert.', 'success');
+              showToast('Instandsetzungsreport als PPTX exportiert.', 'success');
             } catch {
-              showToast('Mängelreport konnte nicht erstellt werden.', 'error');
+              showToast('Instandsetzungsreport konnte nicht erstellt werden.', 'error');
             }
             resolve();
           },

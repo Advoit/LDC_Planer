@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "icons": "node scripts/generate-icons.mjs",
-    "embed:mangels": "node scripts/embed-mangels-template.mjs",
+    "embed:instandsetzungs": "node scripts/embed-instandsetzungs-template.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run"

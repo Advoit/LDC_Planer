@@ -1,4 +1,4 @@
-/* ── Sortier-Helfer für die Aufgaben-Übersicht & den Mängelreport ── */
+/* ── Sortier-Helfer für die Aufgaben-Übersicht & den Instandsetzungsreport ── */
 
 import { MANGEL_ARTEN } from './types';
 
