@@ -98,6 +98,17 @@ export interface Task {
   afterDocuments: ProjectDocument[]; // Dokumente zur Nachbearbeitung (Status-Bereich)
 }
 
+/* ── Deckblatt-Einstellungen des Instandsetzungsreports ── */
+
+export interface ReportCover {
+  kennung: string; // Kennung (z. B. Projekt-/Objektnummer)
+  saal: string; // Saal / Bereich
+  strasse: string; // Straße + Hausnummer
+  plzOrt: string; // PLZ + Ort
+  efkName: string; // Leitende EFK
+  termin: string; // Ausführungstermin
+}
+
 /* ── Projekt ── */
 
 export interface Project {
@@ -110,4 +121,5 @@ export interface Project {
   updatedAt: string;
   tasks: Task[];
   documents: ProjectDocument[]; // Projektbezogene Unterlagen (Pläne etc.)
+  reportCover?: ReportCover; // Deckblatt-Einstellungen des Instandsetzungsreports (gehen in die Sicherung)
 }

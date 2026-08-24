@@ -78,6 +78,14 @@ async function makeProject(): Promise<Project> {
         hash: 'pdoc-hash-1',
       },
     ],
+    reportCover: {
+      kennung: 'OBJ-42',
+      saal: 'Saal 1',
+      strasse: 'Musterstraße 12',
+      plzOrt: '12345 Musterstadt',
+      efkName: 'Max Mustermann',
+      termin: '2026-08-30',
+    },
   };
 }
 
@@ -122,6 +130,17 @@ describe('Export/Import-Roundtrip', () => {
     expect(t.afterDocuments[0].dataUrl.startsWith('data:text/plain')).toBe(true);
     expect(imported!.documents).toHaveLength(1);
     expect(imported!.documents[0].name).toBe('Genehmigung.pdf');
+    /* Deckblatt-Einstellungen des Instandsetzungsreports gehen mit der Sicherung */
+    expect(imported!.reportCover).toEqual(project.reportCover);
+  });
+
+  it('übersteht den ZIP-Zyklus auch ohne Deckblatt-Einstellungen (alte Sicherungen)', async () => {
+    const project = await makeProject();
+    delete project.reportCover;
+    const blob = buildProjectZip(project);
+    const imported = await parseProjectZip(await blob.arrayBuffer());
+    expect(imported).not.toBeNull();
+    expect(imported!.reportCover).toBeUndefined();
   });
 
   it('liefert null bei ungültigen Daten', async () => {

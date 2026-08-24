@@ -35,6 +35,22 @@ describe('migrateProject', () => {
     expect(project.tasks[1].status).toBe('hinweis');
   });
 
+  it('übernimmt Deckblatt-Einstellungen und lässt alte Daten ohne sie durchlaufen', () => {
+    const cover = {
+      kennung: 'OBJ-1',
+      saal: 'Saal 2',
+      strasse: 'Musterstr. 3',
+      plzOrt: '12345 Stadt',
+      efkName: 'E. F. K.',
+      termin: '2026-09-01',
+    };
+    expect(migrateProject({ id: 'X', reportCover: cover }).reportCover).toEqual(cover);
+    /* Ohne Feld (alte Daten) bleibt reportCover undefiniert */
+    expect(migrateProject({ id: 'Y' }).reportCover).toBeUndefined();
+    /* Ungültige Daten werden verworfen */
+    expect(migrateProject({ id: 'Z', reportCover: { kennung: 5 } }).reportCover).toBeUndefined();
+  });
+
   it('wirft bei unbekannter zukünftiger Version einen Fehler', () => {
     expect(() => migrateProject({ schemaVersion: 99, tasks: [] })).toThrow();
   });

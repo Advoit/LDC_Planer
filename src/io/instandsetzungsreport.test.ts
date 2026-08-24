@@ -366,7 +366,8 @@ describe('buildInstandsetzungsreportPptx', () => {
     /* Die ungefüllte Musterseite der Vorlage gehört nicht in den Export */
     expect(files['ppt/slides/slide2.xml']).toBeUndefined();
 
-    /* Sortierung nach Position: T2 (2) vor T10 (10) */
+    /* Sortierung nach Position (Buchstaben alphabetisch, Zahlen numerisch):
+       T2 („2“) vor T10 („10“) */
     /* Generierte XML-Dateien sind wohlgeformt */
     expectWellFormed(slide1);
     expectWellFormed(new TextDecoder().decode(files['ppt/slides/slide3.xml']));
@@ -377,22 +378,22 @@ describe('buildInstandsetzungsreportPptx', () => {
 
     const slide3 = new TextDecoder().decode(files['ppt/slides/slide3.xml']);
     const slide4 = new TextDecoder().decode(files['ppt/slides/slide4.xml']);
+    /* T2 (Position „2“) vor T10 (Position „10“) */
     expect(slide3).toContain('<a:t>Kratzer</a:t>');
     expect(slide3).toContain('<a:t>B2</a:t>');
     expect(slide3).toContain('<a:t>2</a:t>');
     expect(slide4).toContain('<a:t>Riss</a:t>');
 
-    /* Fehlerbeschreibung fällt auf die Aufgabe-Beschreibung zurück */
-    expect(slide3).toContain('<a:t>Beschreibung T2</a:t>');
-
     /* Hinweis zur Behebung: Platzhalter-Klammern entfernt, dahinter die
        Aufgabe-Beschreibung; der Hinweistext steht im Textfeld unten rechts */
+    expect(slide3).toContain('Hinweis zur Behebung:');
+    expect(slide3).toContain('<a:t>Beschreibung T2</a:t>');
     expect(slide4).toContain('Hinweis zur Behebung:');
     expect(slide4).toContain('<a:t>Beschreibung T10</a:t>');
     expect(slide4).toContain('<a:t>Abdichten</a:t>');
     expect(slide4).not.toContain('\u200B [');
 
-    /* Materialzeilen angehängt */
+    /* Materialzeilen angehängt (T2 mit Material ist slide3) */
     expect(slide3).toContain('• Farbe: 2 Eigen');
 
     /* Präsentation registriert alle Folien (1 Deckblatt + 2 Reportseiten) */

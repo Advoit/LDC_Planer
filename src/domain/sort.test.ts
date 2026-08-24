@@ -13,6 +13,12 @@ describe('comparePositions', () => {
     positions.sort(comparePositions);
     expect(positions).toEqual(['3', '', '']);
   });
+
+  it('mischt Alphabet und Zahlen (A1 vor A2 vor A10, A1 vor B1)', () => {
+    const positions = ['A10', 'B1', 'A2', 'A1'];
+    positions.sort(comparePositions);
+    expect(positions).toEqual(['A1', 'A2', 'A10', 'B1']);
+  });
 });
 
 describe('compareArt', () => {

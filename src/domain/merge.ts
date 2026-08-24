@@ -72,6 +72,8 @@ export async function mergeProjects(
 
   const merged: Project = {
     ...local,
+    /* Deckblatt-Einstellungen: lokal bevorzugt, sonst die importierten */
+    reportCover: local.reportCover ?? imported.reportCover,
     documents: mergeDocumentLists(local.documents, imported.documents),
     tasks: mergedTasks,
     updatedAt: now,

@@ -207,6 +207,7 @@ export async function parseProjectZip(
     updatedAt: exportedProject.updatedAt,
     tasks,
     documents,
+    reportCover: exportedProject.reportCover,
   });
 
   return project;

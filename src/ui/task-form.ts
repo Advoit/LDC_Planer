@@ -63,8 +63,8 @@ export function openTaskForm(opts: {
       required: 'true',
     }),
 
-    /* Beschreibung */
-    el('label', { class: 'field-label' }, ['Beschreibung *']),
+    /* Aufgabenbeschreibung */
+    el('label', { class: 'field-label' }, ['Aufgabenbeschreibung *']),
     el('textarea', {
       class: 'input textarea',
       name: 'description',

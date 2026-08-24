@@ -1,7 +1,7 @@
 /* ── Datenmigration – abwärtskompatibel zu alten App-Versionen ── */
 
 import type { Project, Task } from '../domain/types';
-import type { ProjectDocument, TaskImage } from '../domain/types';
+import type { ProjectDocument, ReportCover, TaskImage } from '../domain/types';
 
 export const CURRENT_SCHEMA_VERSION = 1;
 
@@ -50,6 +50,7 @@ function normalizeProject(p: Project): Project {
     updatedAt: typeof p.updatedAt === 'string' ? p.updatedAt : new Date().toISOString(),
     tasks: Array.isArray(p.tasks) ? p.tasks : [],
     documents: normalizeDocuments(p.documents),
+    reportCover: normalizeReportCover(p.reportCover),
   };
 }
 
@@ -68,6 +69,7 @@ function migrateToV1(raw: unknown): Project {
     updatedAt: typeof p.updatedAt === 'string' ? p.updatedAt : now,
     tasks: Array.isArray(p.tasks) ? p.tasks : [],
     documents: normalizeDocuments(p.documents),
+    reportCover: normalizeReportCover(p.reportCover),
   };
 }
 
@@ -141,4 +143,22 @@ function normalizeDocuments(documents: unknown): ProjectDocument[] {
         typeof (doc as ProjectDocument).dataUrl === 'string' &&
         typeof (doc as ProjectDocument).hash === 'string',
     );
+}
+
+/* Deckblatt-Einstellungen: übernehmen nur, wenn alle Felder Strings sind.
+   Fehlt das Feld (alte Sicherungen), bleibt es undefiniert – die
+   Einstellungen sind optional und fallen dann auf die lokalen Vorgaben zurück. */
+function normalizeReportCover(cover: unknown): ReportCover | undefined {
+  if (typeof cover !== 'object' || cover === null) return undefined;
+  const c = cover as Partial<ReportCover>;
+  const fields = ['kennung', 'saal', 'strasse', 'plzOrt', 'efkName', 'termin'] as const;
+  if (!fields.every((f) => typeof c[f] === 'string')) return undefined;
+  return {
+    kennung: c.kennung as string,
+    saal: c.saal as string,
+    strasse: c.strasse as string,
+    plzOrt: c.plzOrt as string,
+    efkName: c.efkName as string,
+    termin: c.termin as string,
+  };
 }

@@ -13,9 +13,8 @@ import {
   buildInstandsetzungsreportPptx,
   instandsetzungsreportFileName,
 } from '../io/instandsetzungsreport';
-import type { InstandsetzungsreportCover } from '../io/instandsetzungsreport';
 import { TASK_STATUSES, STATUS_LABELS } from '../domain/types';
-import type { Project, TaskStatus } from '../domain/types';
+import type { Project, ReportCover, TaskStatus } from '../domain/types';
 
 function pdfBlob(bytes: Uint8Array): Blob {
   /* slice() liefert eine eigene ArrayBuffer-Kopie (typsicher für BlobPart) */
@@ -178,15 +177,21 @@ function coverField(label: string, input: HTMLInputElement): HTMLElement {
   return wrap;
 }
 
-/** „Deckblatt Einstellungen“ – erstellt den Instandsetzungsreport als PPTX. */
-export function openInstandsetzungsreportModal(project: Project): Promise<void> {
-  /* „mangelsreport.cover“ bleibt aus Abwärtskompatibilität lesbar */
-  const saved =
-    getPreference<Partial<InstandsetzungsreportCover>>(
-      'instandsetzungsreport.cover',
-      {},
-    ) ||
-    getPreference<Partial<InstandsetzungsreportCover>>('mangelsreport.cover', {});
+/**
+ * „Deckblatt Einstellungen“ – erstellt den Instandsetzungsreport als PPTX.
+ * Liefert die gewählten Einstellungen zurück (null bei Abbruch), damit sie im
+ * Projekt gespeichert und mit der Sicherung exportiert werden können.
+ */
+export function openInstandsetzungsreportModal(
+  project: Project,
+): Promise<ReportCover | null> {
+  /* Gespeicherte Einstellungen: zuerst aus dem Projekt (gehen in die Sicherung),
+     sonst aus den lokalen Geräte-Vorgaben (alte „mangelsreport.cover“-Einstellung
+     bleibt aus Abwärtskompatibilität lesbar). */
+  const local =
+    getPreference<Partial<ReportCover>>('instandsetzungsreport.cover', {}) ||
+    getPreference<Partial<ReportCover>>('mangelsreport.cover', {});
+  const saved = project.reportCover ?? local;
   const today = new Date().toISOString().slice(0, 10);
 
   const maengelCount = project.tasks.filter(
@@ -247,7 +252,7 @@ export function openInstandsetzungsreportModal(project: Project): Promise<void> 
     coverField('Ausführungstermin', termin),
   ]);
 
-  return new Promise<void>((resolve) => {
+  return new Promise<ReportCover | null>((resolve) => {
     const handle = openModal({
       title: 'Deckblatt Einstellungen',
       content,
@@ -257,7 +262,7 @@ export function openInstandsetzungsreportModal(project: Project): Promise<void> 
           kind: 'secondary',
           onClick: () => {
             handle.close();
-            resolve();
+            resolve(null);
           },
         },
         {
@@ -268,7 +273,7 @@ export function openInstandsetzungsreportModal(project: Project): Promise<void> 
               showToast('Keine Mängel-Aufgaben vorhanden.', 'error');
               return;
             }
-            const cover: InstandsetzungsreportCover = {
+            const cover: ReportCover = {
               kennung: kennung.value.trim(),
               saal: saal.value.trim(),
               strasse: strasse.value.trim(),
@@ -276,6 +281,8 @@ export function openInstandsetzungsreportModal(project: Project): Promise<void> 
               efkName: efkName.value.trim(),
               termin: termin.value,
             };
+            /* Lokale Vorgabe weiterhin merken (Fallback für Projekte ohne eigene
+               Einstellungen) – die Einstellungen liegen jetzt im Projekt. */
             setPreference('instandsetzungsreport.cover', cover);
             handle.close();
             showToast('Instandsetzungsreport wird erstellt…', 'info');
@@ -291,11 +298,11 @@ export function openInstandsetzungsreportModal(project: Project): Promise<void> 
             } catch {
               showToast('Instandsetzungsreport konnte nicht erstellt werden.', 'error');
             }
-            resolve();
+            resolve(cover);
           },
         },
       ],
-      onClose: () => resolve(),
+      onClose: () => resolve(null),
     });
   });
 }

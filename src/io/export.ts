@@ -1,7 +1,7 @@
 /* ── Projekt-Export: saubere ZIP mit Ordnerstruktur ── */
 
 import { strToU8, zipSync } from 'fflate';
-import type { Project, ProjectDocument, Task, TaskImage } from '../domain/types';
+import type { Project, ProjectDocument, ReportCover, Task, TaskImage } from '../domain/types';
 
 const MIME_EXT: Readonly<Record<string, string>> = {
   'image/png': '.png',
@@ -72,6 +72,7 @@ export interface ExportedProject {
   createdAt: string;
   updatedAt: string;
   documents: DocumentRef[];
+  reportCover?: ReportCover; // Deckblatt-Einstellungen des Instandsetzungsreports
 }
 
 export function dataUrlToBytes(dataUrl: string): Uint8Array {
@@ -137,6 +138,8 @@ export function buildProjectZip(project: Project): Blob {
     documents: (project.documents ?? []).map((doc) =>
       documentRef(doc, 'documents'),
     ),
+    /* Nur mitgeben, wenn gesetzt – alte Sicherungen bleiben unverändert */
+    ...(project.reportCover ? { reportCover: project.reportCover } : {}),
   };
   files[`${root}/project.json`] = strToU8(
     JSON.stringify(exportedProject, null, 2),

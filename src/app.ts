@@ -137,9 +137,7 @@ function buildToolbar(): HTMLElement {
           {
             label: 'Instandsetzungsreport',
             icon: 'presentation',
-            onClick: () => {
-              if (project) void openInstandsetzungsreportModal(project);
-            },
+            onClick: () => void handleInstandsetzungsreport(),
           },
           { label: 'Projekt Export', icon: 'file-text', onClick: () => void handleProjectExport() },
           {
@@ -198,9 +196,7 @@ function buildMobileNavigation(): HTMLElement {
           {
             label: 'Instandsetzungsreport',
             icon: 'presentation',
-            onClick: () => {
-              if (project) void openInstandsetzungsreportModal(project);
-            },
+            onClick: () => void handleInstandsetzungsreport(),
           },
           { label: 'Projekt Export', icon: 'file-text', onClick: () => void handleProjectExport() },
           {
@@ -364,6 +360,16 @@ async function handleProjectDocuments(): Promise<void> {
 function handleProjectExport(): void {
   if (!project) return;
   void openProjectExportModal(project);
+}
+
+/** Erstellt den Instandsetzungsreport und speichert die Deckblatt-Einstellungen im Projekt. */
+async function handleInstandsetzungsreport(): Promise<void> {
+  if (!project) return;
+  const cover = await openInstandsetzungsreportModal(project);
+  if (!cover) return;
+  project = touchProject({ ...project, reportCover: cover });
+  schedulePersist();
+  render();
 }
 
 async function handleEditTask(taskId: string): Promise<void> {

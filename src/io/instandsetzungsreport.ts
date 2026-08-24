@@ -18,15 +18,11 @@ import {
 import type { SlideMedia } from './pptx-photo-tiles';
 import { comparePositions } from '../domain/sort';
 import type { Project, Task, TaskImage } from '../domain/types';
+import type { ReportCover } from '../domain/types';
 
-export interface InstandsetzungsreportCover {
-  kennung: string; // Kennung (z. B. Projekt-/Objektnummer)
-  saal: string; // Saal / Bereich
-  strasse: string; // Straße + Hausnummer
-  plzOrt: string; // PLZ + Ort
-  efkName: string; // Leitende EFK
-  termin: string; // Ausführungstermin
-}
+/* Deckblatt-Einstellungen – der Typ lebt im Domain-Modell, damit sie mit der
+   Projektsicherung exportiert und beim Laden wiederhergestellt werden können. */
+export type InstandsetzungsreportCover = ReportCover;
 
 export interface InstandsetzungsreportOptions {
   cover: InstandsetzungsreportCover;
@@ -81,7 +77,8 @@ export async function buildInstandsetzungsreportPptx(
     buildCoverSlide(decode('ppt/slides/slide1.xml'), opts.cover),
   );
 
-  /* ── Reportseiten (ab Seite 2), nach Position sortiert ── */
+  /* ── Reportseiten (ab Seite 2), natürlich nach Position sortiert ──
+     (Buchstaben alphabetisch, Zahlen numerisch: „A1“ vor „A2“ vor „A10“) */
   const maengel = project.tasks
     .filter((t) => (t.typ ?? 'maengel') === 'maengel')
     .sort((a, b) => comparePositions(a.position, b.position));
