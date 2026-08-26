@@ -15,6 +15,26 @@ export interface TaskListOptions {
 
 type SortKey = 'name' | 'status' | 'time' | 'art' | 'position';
 
+interface TaskListState {
+  query: string;
+  filters: Set<TaskStatus>;
+  typFilters: Set<TaskTyp>;
+  sort: SortKey;
+}
+
+function createDefaultTaskListState(): TaskListState {
+  return {
+    query: '',
+    filters: new Set<TaskStatus>(['offen', 'hinweis']),
+    /* Standard: beide Typen eingeblendet */
+    typFilters: new Set<TaskTyp>(TASK_TYPS),
+    sort: 'name',
+  };
+}
+
+let taskListProjectId: string | null = null;
+let taskListState = createDefaultTaskListState();
+
 const STATUS_ORDER: Record<TaskStatus, number> = {
   offen: 0,
   hinweis: 1,
@@ -24,18 +44,16 @@ const STATUS_ORDER: Record<TaskStatus, number> = {
 export function renderTaskList(container: HTMLElement, opts: TaskListOptions): void {
   clear(container);
 
-  const state: {
-    query: string;
-    filters: Set<TaskStatus>;
-    typFilters: Set<TaskTyp>;
-    sort: SortKey;
-  } = {
-    query: '',
-    filters: new Set<TaskStatus>(['offen', 'hinweis']),
-    /* Standard: beide Typen eingeblendet */
-    typFilters: new Set<TaskTyp>(TASK_TYPS),
-    sort: 'name',
-  };
+  /*
+   * Das App-Shell rendert die Übersicht nach jeder Änderung komplett neu.
+   * Der Zustand bleibt deshalb außerhalb dieser Funktion erhalten, solange
+   * weiterhin dasselbe Projekt geöffnet ist.
+   */
+  if (taskListProjectId !== opts.project.id) {
+    taskListProjectId = opts.project.id;
+    taskListState = createDefaultTaskListState();
+  }
+  const state = taskListState;
 
   /* ── Steuerleiste (aufklappbar) ── */
   const controls = el('div', { class: 'list-controls' });
@@ -58,6 +76,7 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
     class: 'input search-input',
     placeholder: 'Aufgaben durchsuchen…',
   }) as HTMLInputElement;
+  searchInput.value = state.query;
   searchInput.addEventListener('input', () => {
     state.query = searchInput.value;
     renderList();
@@ -81,11 +100,10 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
       chip.classList.toggle('active', state.filters.has(def.status));
       renderList();
     });
+    chip.classList.toggle('active', state.filters.has(def.status));
     chips.set(def.status, chip);
     filterRow.appendChild(chip);
   }
-  chips.get('offen')!.classList.add('active');
-  chips.get('hinweis')!.classList.add('active');
 
   /* Typ-Filter: Mängel / Umbau/Neuinstallation (Standard: beide eingeblendet) */
   const typRow = el('div', { class: 'filter-row' });
@@ -101,7 +119,7 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
       chip.classList.toggle('active', state.typFilters.has(typ));
       renderList();
     });
-    chip.classList.add('active');
+    chip.classList.toggle('active', state.typFilters.has(typ));
     typChips.set(typ, chip);
     typRow.appendChild(chip);
   }
@@ -117,6 +135,7 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
   for (const o of sortOptions) {
     sortSelect.appendChild(el('option', { value: o.value }, [o.label]));
   }
+  sortSelect.value = state.sort;
   sortSelect.addEventListener('change', () => {
     state.sort = sortSelect.value as SortKey;
     renderList();

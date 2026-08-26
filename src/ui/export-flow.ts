@@ -5,14 +5,8 @@ import { downloadBlob } from './dom';
 import { openModal } from './modal';
 import { showToast } from './toast';
 import { getPreference, setPreference } from '../core/preferences';
-import { buildMaterialPdf, materialReportFileName } from '../io/material-export';
 import type { MaterialReportOptions } from '../io/material-export';
-import { buildProjectPdf, projectReportFileName } from '../io/project-export';
 import type { ProjectExportOptions } from '../io/project-export';
-import {
-  buildInstandsetzungsreportPptx,
-  instandsetzungsreportFileName,
-} from '../io/instandsetzungsreport';
 import { TASK_STATUSES, STATUS_LABELS } from '../domain/types';
 import type { Project, ReportCover, TaskStatus } from '../domain/types';
 
@@ -83,6 +77,7 @@ export function openMaterialExportModal(project: Project): Promise<void> {
           onClick: async () => {
             handle.close();
             try {
+              const { buildMaterialPdf, materialReportFileName } = await import('../io/material-export');
               const bytes = await buildMaterialPdf(project, opts);
               downloadBlob(pdfBlob(bytes), materialReportFileName(project));
               showToast('Materialliste als PDF exportiert.', 'success');
@@ -153,6 +148,7 @@ export function openProjectExportModal(project: Project): Promise<void> {
             handle.close();
             const opts: ProjectExportOptions = { statuses: selected };
             try {
+              const { buildProjectPdf, projectReportFileName } = await import('../io/project-export');
               const bytes = await buildProjectPdf(project, opts);
               downloadBlob(pdfBlob(bytes), projectReportFileName(project));
               showToast('Projektbericht als PDF exportiert.', 'success');
@@ -314,6 +310,10 @@ export function openInstandsetzungsreportModal(
             handle.close();
             showToast('Instandsetzungsreport wird erstellt…', 'info');
             try {
+              const {
+                buildInstandsetzungsreportPptx,
+                instandsetzungsreportFileName,
+              } = await import('../io/instandsetzungsreport');
               const bytes = await buildInstandsetzungsreportPptx(project, { cover });
               downloadBlob(
                 new Blob([bytes.slice()], {

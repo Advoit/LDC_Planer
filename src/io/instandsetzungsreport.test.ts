@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import { unzipSync } from 'fflate';
 import {
   buildInstandsetzungsreportPptx,
@@ -157,6 +157,11 @@ describe('photoGrid', () => {
 });
 
 describe('buildReportSlide (Foto-Kacheln: oben Vorher, unten Nachher)', () => {
+  let templateBytes: Uint8Array;
+  beforeAll(async () => {
+    templateBytes = await getInstandsetzungsreportTemplateBytes();
+  });
+
   const media = (n: number, prefix: string) =>
     Array.from({ length: n }, (_, i) => ({
       bytes: new Uint8Array(0),
@@ -166,7 +171,7 @@ describe('buildReportSlide (Foto-Kacheln: oben Vorher, unten Nachher)', () => {
     }));
 
   it('platziert 2 Vorher-Bilder nebeneinander in der oberen Kachel', () => {
-    const files = unzipSync(getInstandsetzungsreportTemplateBytes());
+    const files = unzipSync(templateBytes);
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
     const xml = buildReportSlide(baseSlide, makeTask('T1'), COVER, media(2, 'b'), []);
 
@@ -183,7 +188,7 @@ describe('buildReportSlide (Foto-Kacheln: oben Vorher, unten Nachher)', () => {
   });
 
   it('platziert Vorher oben und Nachher unten in getrennten Kacheln', () => {
-    const files = unzipSync(getInstandsetzungsreportTemplateBytes());
+    const files = unzipSync(templateBytes);
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
     const xml = buildReportSlide(
       baseSlide,
@@ -208,7 +213,7 @@ describe('buildReportSlide (Foto-Kacheln: oben Vorher, unten Nachher)', () => {
   });
 
   it('platziert 4 Nachher-Bilder als 2×2-Quadrat in der unteren Kachel', () => {
-    const files = unzipSync(getInstandsetzungsreportTemplateBytes());
+    const files = unzipSync(templateBytes);
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
     const xml = buildReportSlide(baseSlide, makeTask('T1'), COVER, [], media(4, 'n'));
 
@@ -224,7 +229,7 @@ describe('buildReportSlide (Foto-Kacheln: oben Vorher, unten Nachher)', () => {
   });
 
   it('behält ohne Fotos die leeren Platzhalter der Vorlage', () => {
-    const files = unzipSync(getInstandsetzungsreportTemplateBytes());
+    const files = unzipSync(templateBytes);
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
     const xml = buildReportSlide(baseSlide, makeTask('T1'), COVER, [], []);
     expect(xml).toContain('Bildplatzhalter 3');
@@ -233,7 +238,7 @@ describe('buildReportSlide (Foto-Kacheln: oben Vorher, unten Nachher)', () => {
   });
 
   it('schneidet ein breites Bild seitlich symmetrisch zu (srcRect l == r)', () => {
-    const files = unzipSync(getInstandsetzungsreportTemplateBytes());
+    const files = unzipSync(templateBytes);
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
     const wide = [
       { bytes: new Uint8Array(0), width: 2400, height: 1000, file: 'ppt/media/b1.png' },
@@ -251,7 +256,7 @@ describe('buildReportSlide (Foto-Kacheln: oben Vorher, unten Nachher)', () => {
   });
 
   it('schneidet ein hohes Bild oben/unten symmetrisch zu (srcRect t == b)', () => {
-    const files = unzipSync(getInstandsetzungsreportTemplateBytes());
+    const files = unzipSync(templateBytes);
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
     const tall = [
       { bytes: new Uint8Array(0), width: 800, height: 2000, file: 'ppt/media/b1.png' },
@@ -268,7 +273,7 @@ describe('buildReportSlide (Foto-Kacheln: oben Vorher, unten Nachher)', () => {
   });
 
   it('nutzt bei passendem Seitenverhältnis keinen Zuschnitt', () => {
-    const files = unzipSync(getInstandsetzungsreportTemplateBytes());
+    const files = unzipSync(templateBytes);
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
     /* Exakt das Seitenverhältnis der Vorher-Kachel (3861537 × 2424243) */
     const fit = [
@@ -280,8 +285,13 @@ describe('buildReportSlide (Foto-Kacheln: oben Vorher, unten Nachher)', () => {
 });
 
 describe('buildReportSlide (mehrzeiliger Text, PowerPoint-kompatibel)', () => {
+  let templateBytes: Uint8Array;
+  beforeAll(async () => {
+    templateBytes = await getInstandsetzungsreportTemplateBytes();
+  });
+
   it('erzeugt bei mehrzeiligem Text gültige Runs (a:br als Geschwister, ein a:t pro Run)', () => {
-    const files = unzipSync(getInstandsetzungsreportTemplateBytes());
+    const files = unzipSync(templateBytes);
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
     const task = makeTask('T1', {
       pruefung: 'Sichtprüfung',
@@ -302,7 +312,7 @@ describe('buildReportSlide (mehrzeiliger Text, PowerPoint-kompatibel)', () => {
   });
 
   it('lässt einzeiligen Text unverändert (ein Run, ein a:t)', () => {
-    const files = unzipSync(getInstandsetzungsreportTemplateBytes());
+    const files = unzipSync(templateBytes);
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
     const xml = buildReportSlide(
       baseSlide,
@@ -317,7 +327,7 @@ describe('buildReportSlide (mehrzeiliger Text, PowerPoint-kompatibel)', () => {
   });
 
   it('setzt die Aufgabe-Beschreibung hinter „Hinweis zur Behebung:“ und den Hinweistext unten rechts', () => {
-    const files = unzipSync(getInstandsetzungsreportTemplateBytes());
+    const files = unzipSync(templateBytes);
     const baseSlide = new TextDecoder().decode(files['ppt/slides/slide2.xml']);
     const task = makeTask('T1', {
       description: 'Riss im Putz',

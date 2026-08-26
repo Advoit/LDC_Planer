@@ -8,7 +8,6 @@
  */
 
 import { strToU8, unzipSync, zipSync } from 'fflate';
-import { INSTANDSETZUNGSREPORT_TEMPLATE_BASE64 } from './instandsetzungsreport-template';
 import {
   buildPhotoPics,
   imageToPng,
@@ -54,9 +53,14 @@ const CT_SLIDE =
 
 let cachedTemplate: Uint8Array | null = null;
 
-/** Gibt die eingebettete PPTX-Vorlage als Bytes zurück (einmalig dekodiert). */
-export function getInstandsetzungsreportTemplateBytes(): Uint8Array {
-  if (!cachedTemplate) cachedTemplate = base64ToBytes(INSTANDSETZUNGSREPORT_TEMPLATE_BASE64);
+/** Lädt und dekodiert die eingebettete PPTX-Vorlage erst beim tatsächlichen Export. */
+export async function getInstandsetzungsreportTemplateBytes(): Promise<Uint8Array> {
+  if (!cachedTemplate) {
+    const { INSTANDSETZUNGSREPORT_TEMPLATE_BASE64 } = await import(
+      './instandsetzungsreport-template'
+    );
+    cachedTemplate = base64ToBytes(INSTANDSETZUNGSREPORT_TEMPLATE_BASE64);
+  }
   return cachedTemplate;
 }
 
@@ -68,7 +72,7 @@ export async function buildInstandsetzungsreportPptx(
   project: Project,
   opts: InstandsetzungsreportOptions,
 ): Promise<Uint8Array> {
-  const files = unzipSync(getInstandsetzungsreportTemplateBytes());
+  const files = unzipSync(await getInstandsetzungsreportTemplateBytes());
   const decode = (path: string): string =>
     new TextDecoder().decode(files[path]);
 

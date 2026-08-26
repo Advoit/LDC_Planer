@@ -6,11 +6,6 @@ import { renderTaskList } from './ui/task-list';
 import { openTaskForm } from './ui/task-form';
 import { openTaskDetail } from './ui/task-detail';
 import { openNewProjectFlow } from './ui/project-form';
-import {
-  openMaterialExportModal,
-  openProjectExportModal,
-  openInstandsetzungsreportModal,
-} from './ui/export-flow';
 import { showMergeOrOverwriteDialog, runMergeFlow } from './ui/merge-flow';
 import { openProjectDocumentsModal } from './ui/project-documents';
 import { createDropdown } from './ui/dropdown';
@@ -143,9 +138,7 @@ function buildToolbar(): HTMLElement {
           {
             label: 'Material Export',
             icon: 'clipboard',
-            onClick: () => {
-              if (project) void openMaterialExportModal(project);
-            },
+            onClick: () => void handleMaterialExport(),
           },
         ],
       }),
@@ -202,9 +195,7 @@ function buildMobileNavigation(): HTMLElement {
           {
             label: 'Material Export',
             icon: 'clipboard',
-            onClick: () => {
-              if (project) void openMaterialExportModal(project);
-            },
+            onClick: () => void handleMaterialExport(),
           },
         ],
       },
@@ -357,14 +348,22 @@ async function handleProjectDocuments(): Promise<void> {
   showToast('Unterlagen gespeichert.', 'success');
 }
 
-function handleProjectExport(): void {
+async function handleMaterialExport(): Promise<void> {
   if (!project) return;
-  void openProjectExportModal(project);
+  const { openMaterialExportModal } = await import('./ui/export-flow');
+  await openMaterialExportModal(project);
+}
+
+async function handleProjectExport(): Promise<void> {
+  if (!project) return;
+  const { openProjectExportModal } = await import('./ui/export-flow');
+  await openProjectExportModal(project);
 }
 
 /** Erstellt den Instandsetzungsreport und speichert die Deckblatt-Einstellungen im Projekt. */
 async function handleInstandsetzungsreport(): Promise<void> {
   if (!project) return;
+  const { openInstandsetzungsreportModal } = await import('./ui/export-flow');
   const cover = await openInstandsetzungsreportModal(project);
   if (!cover) return;
   project = touchProject({ ...project, reportCover: cover });
