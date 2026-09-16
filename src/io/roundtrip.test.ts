@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildLdcproj } from './export';
-import { parseLdcproj } from './import';
+import { buildProjectZip } from './export';
+import { parseProjectZip } from './import';
 import { hashDataUrl } from '../core/hash';
 import type { Project, Task } from '../domain/types';
 
@@ -27,11 +27,37 @@ async function makeProject(): Promise<Project> {
       { id: 'M2', name: 'Pinsel', quantity: 2, unit: 'Stück' },
     ],
     plannedWork: '02:30',
+    personnel: 2,
+    typ: 'maengel',
+    art: 'B2',
+    pruefung: 'Sichtprüfung',
+    fehlerbeschreibung: 'Farbe blättert ab',
+    position: 'EG 3',
     status: 'hinweis',
     editedBy: 'Max',
     editedAt: '2026-02-02',
     hintText: 'Farbe angetrocknet',
     afterImages: [{ id: 'IMG-2', dataUrl: png, hash }],
+    afterDocuments: [
+      {
+        id: 'ADOC-1',
+        name: 'Abnahmebericht.txt',
+        mime: 'text/plain',
+        size: 42,
+        dataUrl: 'data:text/plain;base64,SGFsbG8h',
+        hash: 'adoc-hash-1',
+      },
+    ],
+    documents: [
+      {
+        id: 'DOC-1',
+        name: 'Bauplan.pdf',
+        mime: 'application/pdf',
+        size: 1234,
+        dataUrl: 'data:application/pdf;base64,JVBERi0xLjQ=',
+        hash: 'doc-hash-1',
+      },
+    ],
   };
   return {
     schemaVersion: 1,
@@ -42,16 +68,34 @@ async function makeProject(): Promise<Project> {
     createdAt: '2026-02-01T09:00:00.000Z',
     updatedAt: '2026-02-01T10:00:00.000Z',
     tasks: [task],
+    documents: [
+      {
+        id: 'PDOC-1',
+        name: 'Genehmigung.pdf',
+        mime: 'application/pdf',
+        size: 2048,
+        dataUrl: 'data:application/pdf;base64,JVBERi0xLjU=',
+        hash: 'pdoc-hash-1',
+      },
+    ],
+    reportCover: {
+      kennung: 'OBJ-42',
+      saal: 'Saal 1',
+      strasse: 'Musterstraße 12',
+      plzOrt: '12345 Musterstadt',
+      efkName: 'Max Mustermann',
+      termin: '2026-08-30',
+    },
   };
 }
 
 describe('Export/Import-Roundtrip', () => {
-  it('übersteht einen kompletten .ldcproj-Zyklus', async () => {
+  it('übersteht einen kompletten ZIP-Zyklus', async () => {
     const project = await makeProject();
-    const blob = buildLdcproj(project);
+    const blob = buildProjectZip(project);
     const buffer = await blob.arrayBuffer();
 
-    const imported = await parseLdcproj(buffer);
+    const imported = await parseProjectZip(buffer);
     expect(imported).not.toBeNull();
 
     expect(imported!.id).toBe('PROJ5678');
@@ -68,10 +112,39 @@ describe('Export/Import-Roundtrip', () => {
     expect(t.images[0].dataUrl.startsWith('data:image/png')).toBe(true);
     expect(t.material).toHaveLength(2);
     expect(t.plannedWork).toBe('02:30');
+    expect(t.personnel).toBe(2);
+    /* Mängel-/Umbau-Felder */
+    expect(t.typ).toBe('maengel');
+    expect(t.art).toBe('B2');
+    expect(t.pruefung).toBe('Sichtprüfung');
+    expect(t.fehlerbeschreibung).toBe('Farbe blättert ab');
+    expect(t.position).toBe('EG 3');
+    /* Dokumente */
+    expect(t.documents).toHaveLength(1);
+    expect(t.documents[0].name).toBe('Bauplan.pdf');
+    expect(t.documents[0].mime).toBe('application/pdf');
+    expect(t.documents[0].dataUrl.startsWith('data:application/pdf')).toBe(true);
+    /* Nachher-Dokumente */
+    expect(t.afterDocuments).toHaveLength(1);
+    expect(t.afterDocuments[0].name).toBe('Abnahmebericht.txt');
+    expect(t.afterDocuments[0].dataUrl.startsWith('data:text/plain')).toBe(true);
+    expect(imported!.documents).toHaveLength(1);
+    expect(imported!.documents[0].name).toBe('Genehmigung.pdf');
+    /* Deckblatt-Einstellungen des Instandsetzungsreports gehen mit der Sicherung */
+    expect(imported!.reportCover).toEqual(project.reportCover);
+  });
+
+  it('übersteht den ZIP-Zyklus auch ohne Deckblatt-Einstellungen (alte Sicherungen)', async () => {
+    const project = await makeProject();
+    delete project.reportCover;
+    const blob = buildProjectZip(project);
+    const imported = await parseProjectZip(await blob.arrayBuffer());
+    expect(imported).not.toBeNull();
+    expect(imported!.reportCover).toBeUndefined();
   });
 
   it('liefert null bei ungültigen Daten', async () => {
     const junk = new TextEncoder().encode('kein zip').buffer;
-    expect(await parseLdcproj(junk)).toBeNull();
+    expect(await parseProjectZip(junk)).toBeNull();
   });
 });

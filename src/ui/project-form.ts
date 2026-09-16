@@ -1,26 +1,14 @@
-/* ── Neues-Projekt-Flow (Warnung → Formular) ── */
+/* ── Neues-Projekt-Flow (Formular) ──
+   Das geöffnete Projekt bleibt erhalten und ist später unter
+   „Meine Projekte“ wieder erreichbar – daher keine Warnung mehr. */
 
 import { el } from './dom';
-import { openModal, confirmDialog } from './modal';
+import { openModal } from './modal';
 import { validateProjectInput, createProject } from '../domain/project';
 import type { Project } from '../domain/types';
 
-export async function openNewProjectFlow(
-  hasCurrentProject: boolean,
-): Promise<Project | null> {
-  /* Schritt 1: Warnung, falls ein Projekt existiert */
-  if (hasCurrentProject) {
-    const confirmed = await confirmDialog({
-      title: 'Neues Projekt',
-      message:
-        'Achtung: Alle vorhandenen Daten werden entfernt. Möchten Sie trotzdem ein neues Projekt anlegen?',
-      confirmLabel: 'Neues Projekt anlegen',
-      danger: true,
-    });
-    if (!confirmed) return null;
-  }
-
-  /* Schritt 2: Formular */
+export function openNewProjectFlow(): Promise<Project | null> {
+  /* Formular */
   const nameInput = el('input', {
     type: 'text',
     class: 'input',

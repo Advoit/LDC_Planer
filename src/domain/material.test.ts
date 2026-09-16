@@ -18,11 +18,19 @@ function makeTask(id: string, material: { name: string; quantity: number; unit: 
     thumbnailSourceId: null,
     material: material.map((m, i) => ({ id: `${id}-${i}`, ...m })),
     plannedWork: '',
+    personnel: 1,
+    typ: 'maengel',
+    art: '',
+    pruefung: '',
+    fehlerbeschreibung: '',
+    position: '',
     status: 'offen',
     editedBy: '',
     editedAt: '',
     hintText: '',
     afterImages: [],
+    afterDocuments: [],
+    documents: [],
   };
 }
 

@@ -8,50 +8,60 @@ import type { Project, Task } from '../domain/types';
 
 export type MergeChoice = 'merge' | 'overwrite' | 'cancel';
 
-/** Fragt: Zusammenführen / Überschreiben / Abbrechen. */
+/**
+ * Fragt: Zusammenführen / Überschreiben / Abbrechen.
+ * Zusammenführen ist auch bei unterschiedlicher Projekt-ID möglich –
+ * dann wird auf den Verlust der Import-ID hingewiesen.
+ */
 export function showMergeOrOverwriteDialog(
-  canMerge: boolean,
+  local: Project,
+  imported: Project,
 ): Promise<MergeChoice> {
   return new Promise((resolve) => {
-    const content = el('p', {}, [
-      'Möchten Sie das geladene Projekt mit dem aktuellen zusammenführen oder das aktuelle überschreiben?',
-    ]);
-    const actions: {
-      label: string;
-      kind: 'primary' | 'secondary' | 'danger';
-      onClick: () => void;
-    }[] = [
-      {
-        label: 'Abbrechen',
-        kind: 'secondary',
-        onClick: () => {
-          handle.close();
-          resolve('cancel');
-        },
-      },
-      {
-        label: 'Überschreiben',
-        kind: 'danger',
-        onClick: () => {
-          handle.close();
-          resolve('overwrite');
-        },
-      },
-    ];
-    if (canMerge) {
-      actions.splice(1, 0, {
-        label: 'Zusammenführen',
-        kind: 'primary',
-        onClick: () => {
-          handle.close();
-          resolve('merge');
-        },
-      });
-    }
+    const sameId = local.id === imported.id;
+    const warning =
+      sameId
+        ? el('p', {}, [
+            'Möchten Sie das geladene Projekt mit dem aktuellen zusammenführen oder das aktuelle überschreiben?',
+          ])
+        : el('div', { class: 'merge-warning' }, [
+            el('p', {}, [
+              `Die Projekt-ID des Imports (${imported.id}) unterscheidet sich vom aktuellen Projekt (${local.id}).`,
+            ]),
+            el('p', { class: 'merge-warning-note' }, [
+              'Beim Zusammenführen wird die ID des Imports verworfen – es werden nur die Aufgaben angehängt.',
+            ]),
+          ]);
+
     const handle = openModal({
       title: 'Projekt laden',
-      content,
-      actions,
+      content: warning,
+      actions: [
+        {
+          label: 'Abbrechen',
+          kind: 'secondary',
+          onClick: () => {
+            handle.close();
+            resolve('cancel');
+          },
+        },
+        {
+          label: 'Zusammenführen',
+          kind: 'primary',
+          onClick: () => {
+            handle.close();
+            resolve('merge');
+          },
+        },
+        {
+          label: 'Überschreiben',
+          kind: 'danger',
+          onClick: () => {
+            handle.close();
+            resolve('overwrite');
+          },
+        },
+      ],
       onClose: () => resolve('cancel'),
     });
   });

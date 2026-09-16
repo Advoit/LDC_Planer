@@ -7,12 +7,14 @@
   "scripts": {
     "dev": "vite",
     "icons": "node scripts/generate-icons.mjs",
+    "embed:instandsetzungs": "node scripts/embed-instandsetzungs-template.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run"
   },
   "dependencies": {
-    "fflate": "^0.8.2"
+    "fflate": "^0.8.2",
+    "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

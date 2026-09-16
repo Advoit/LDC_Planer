@@ -1,112 +1,139 @@
-# LDC Projekt Planer
+<div align="center">
 
-Eine **dynamische PWA** zum Planen und Ausführen von Projekten – **offline-first, local-first**.
+# LDC Planer
 
-Alle Daten bleiben **lokal auf dem Gerät** (IndexedDB). Es werden keine Daten an einen Server gesendet – der Server dient nur als „Gerüst“ zum Ausliefern der App (GitHub Pages). Die App funktioniert nach dem ersten Laden **vollständig offline**, inklusive aller Bilder.
+**Bau- und Sanierungsprojekte planen, abarbeiten und dokumentieren – offline, ohne Konto, ohne Server.**
 
-## Features
+### ▶︎ [App öffnen](https://advoit.github.io/LDC_Planer/)
 
-- **Neues Projekt** anlegen (Name, Ort, Beschreibung) mit individueller Projekt-ID (8 Zeichen) – mit Sicherheitsabfrage, da vorhandene Daten entfernt werden
-- **Projekt sichern** als `.ldcproj`-ZIP mit sauberer Ordnerstruktur (JSON + Bilder)
-- **Projekt laden / zusammenführen**:
-  - Gleiche Projekt-ID → Zusammenführen oder Überschreiben wählbar
-  - Unterschiedliche Projekt-ID → klare Meldung, nur „Aktuelles Projekt überschreiben“ möglich
-  - Zusammenführen: Konflikte pro Aufgabe per Modal („Lokal behalten“ vs. „Importiertes übernehmen“), Bilder werden über **SHA-256-Hash** dedupliziert (gleicher Hash → überspringen, anderer Hash → anhängen)
-- **Neue Aufgabe** mit Erstellungsdatum, Aufgaben-ID, Name, Beschreibung, Vorher-Bildern (antippen zum Vergrößern), Thumbnail-Picker (Standard: Bild 1), Material mit **Intellisense** (Name + zuletzt verwendete Einheit) und geplantem Arbeitsaufwand (hh:mm)
-- **Aufgabe bearbeiten** (Toggle in der Toolbar): Bleistift an jeder Aufgabe, Felder wie bei „Neue Aufgabe“ + Löschen
-- **Aufgabenübersicht** mit Suche, Filter (Offen/Hinweis/Behoben) und Sortierung (Name/Status/Zeitaufwand), Client-seitige 60×60-Thumbnails (Canvas, mittig zugeschnitten)
-- **Aufgaben-Detail** (Antippen): Statuswechsel Offen → Hinweis → Behoben mit Pflichtfeldern „Bearbeitet von“/„Bearbeitet am“, Hinweistext (Pflicht bei „Hinweis“), Nachher-Bilder
-- **Materialliste drucken**: nach Aufgaben oder als Gesamtliste (nach Name + Einheit summiert), nur offene Aufgaben – abgeschlossene nur mit Checkbox
+<img src="https://img.shields.io/badge/offline--f%C3%A4hig-nach%20dem%20ersten%20Laden-34C759?style=flat-square" alt="offline-fähig"> <img src="https://img.shields.io/badge/Daten-bleiben%20auf%20dem%20Ger%C3%A4t-007AFF?style=flat-square" alt="Daten bleiben lokal"> <img src="https://img.shields.io/badge/mobil%20%26%20Desktop-responsiv-1D1D1F?style=flat-square" alt="mobil und Desktop"> <img src="https://img.shields.io/badge/installierbar-als%20App-FF9500?style=flat-square" alt="installierbar">
 
-## Technik
+</div>
 
-| Bereich | Wahl |
-| --- | --- |
-| Sprache | TypeScript (strict) |
-| Framework | Vanilla (kein Framework) + Vite |
-| Speicherung | IndexedDB (lokal, offline) |
-| PWA | `vite-plugin-pwa` (Workbox), autoUpdate |
-| ZIP | `fflate` |
-| Tests | Vitest (Merge, Migration, Material, Export/Import-Roundtrip) |
+---
 
-### Architektur & Regeln
+## Kurz gesagt
 
-- **DRY** und **SRP**: kleine, fokussierte Module
-- Klassen/Module maximal **300 Zeilen** – Ausnahme: Datenklassen/DTOs in `src/domain/types.ts` (bewusst kompakt, ohne Logik)
-- **Sprechende Namen** für extrahierte Methoden und neue Klassen (Zweck im Namen)
-- **Datenmigration** mit maximaler Abwärtskompatibilität: `src/core/migrate.ts` normalisiert alte Daten schrittweise (`schemaVersion`, Default-Werte für fehlende Felder) – alte `.ldcproj`-Dateien und alte lokale Daten bleiben ladbar
+Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben erfassen, Fotos und Pläne anhängen, den Bearbeitungsstand nachhalten und am Ende Bericht, Materialliste oder Instandsetzungsreport ausgeben.
 
-## Lokale Entwicklung
+- **Alles bleibt lokal.** Keine Anmeldung, kein Server, keine Datenübertragung – die Projekte liegen im Browser-Speicher des Geräts.
+- **Auch ohne Netz.** Einmal geladen, funktioniert die App vollständig offline. Am Handy lässt sie sich wie eine normale App installieren.
+- **Sicherbar.** Jedes Projekt lässt sich als ZIP-Datei sichern, wieder laden, zusammenführen oder überschreiben.
 
-```bash
-npm install        # Abhängigkeiten installieren
-npm run dev        # Dev-Server starten (http://localhost:5173)
-npm run build      # Typecheck + Production-Build nach dist/
-npm run preview    # Build lokal testen
-npm test           # Tests ausführen
-npm run icons      # PWA-Icons neu generieren (nur bei Bedarf)
-```
+## Funktionen
 
-## Release über GitHub Pages
+**📁 Projekte**
+- Beliebig viele Projekte parallel verwalten – öffnen, wechseln, löschen
+- Neues Projekt mit Name, Ort und Beschreibung (individuelle 8-stellige Projekt-ID)
+- Projekt-ZIP laden per Knopf **oder** einfach in die Ablagefläche auf der Startseite ziehen
+- Beim Laden wählen: **zusammenführen** (auch bei anderer Projekt-ID) oder **überschreiben**
 
-Die App wird automatisch über einen GitHub-Actions-Workflow (`.github/workflows/deploy.yml`) auf GitHub Pages veröffentlicht, sobald Änderungen auf den `main`-Branch gepusht werden.
+**📝 Aufgaben**
+- Name und Beschreibung, Typ **Mängel** oder **Umbau/Neuinstallation**, Art **A1–C3**
+- Bei Mängeln zusätzlich: Prüfung, Fehlerbeschreibung, Position
+- Vorher- und Nachher-Bilder (antippen zum Vergrößern), Vorschaubild wählbar, auf dem Handy **direkt fotografieren**
+- Große Fotos werden beim Hochladen automatisch verkleinert (längste Kante 1600 px)
+- Dokumente und Pläne je Aufgabe oder je Projekt, mit Vorschau im Browser
+- Material mit Vorschlägen aus früheren Aufgaben (Artikel **und** zuletzt verwendete Einheit)
+- Geplanter Arbeitsaufwand (hh:mm) und Personalbedarf
+- **Duplizieren** für ähnliche Aufgaben – Material und Bilder kommen mit, der Status startet neu
 
-### Einmalige Einrichtung
+**✅ Status & Übersicht**
+- Statusfluss **Offen → Hinweis → Behoben** mit Pflichtfeldern („Bearbeitet von“, „Bearbeitet am“, Hinweistext)
+- **Schnellwechsel** in der Detailansicht: Status antippen – Name und Datum sind vorbelegt
+- Suche und Filter (Status, Typ), Sortierung nach Name, Status, Zeitaufwand, Art oder Position
+- **Auswahlmodus**: mehrere Aufgaben auf einmal umstellen, als PDF ausgeben oder löschen
+- Aufgaben einzeln als PDF-Blatt ausgeben
 
-1. **Repository anlegen** und Code pushen:
-   ```bash
-   git init
-   git add .
-   git commit -m "LDC Projekt Planer"
-   git branch -M main
-   git remote add origin https://github.com/<BENUTZER>/<REPO>.git
-   git push -u origin main
-   ```
-   > **Hinweis:** GitHub Pages funktioniert nur bei **öffentlichen Repos** (oder mit einem kostenpflichtigen GitHub-Plan bei privaten Repos).
+**🛟 Wiederherstellung**
+- **Papierkorb** für gelöschte Aufgaben (max. 10) – inklusive „Rückgängig“ direkt nach dem Löschen
+- **Sicherungsstände**: vor Überschreiben, Zusammenführen und Wiederherstellen wird automatisch ein Stand gesichert
 
-2. **GitHub Pages aktivieren**:
-   - Repository → **Settings → Pages**
-   - Unter **Build and deployment**: Quelle **„GitHub Actions“** auswählen (nicht „Deploy from a branch“)
+## Exporte
 
-3. **Release auslösen**:
-   - Ein Push auf `main` löst den Workflow automatisch aus
-   - Manuell: **Actions → „Deploy to GitHub Pages“ → Run workflow**
+| Export | Inhalt | Datei |
+| --- | --- | --- |
+| **Projektbericht** | Deckblatt, klickbares Inhaltsverzeichnis, Projektinformationen, Unterlagen und alle Aufgaben – nach Status gruppiert, jede Aufgabe auf eigener Seite | PDF |
+| **Materialliste** | nach Aufgaben gruppiert oder als summierte Gesamtliste (nach Name + Einheit) | PDF, CSV |
+| **Einzelaufgabe** | eine Aufgabe als Blatt zum Ausdrucken oder Weitergeben | PDF |
+| **Instandsetzungsreport** | Report auf Basis der Vorlage `Instandsetzungsreport.pptx`, eine Seite pro Mangel, sortiert nach Position | PPTX |
 
-4. **Veröffentlichen**:
-   - Der Workflow baut die App (`npm run build`) und veröffentlicht das `dist/`-Verzeichnis
-   - Die App ist danach unter folgender URL erreichbar:
-     ```
-     https://<BENUTZER>.github.io/<REPO>/
-     ```
-   - Den aktuellen Status zeigt die Übersicht **Actions → Deploy to GitHub Pages**
+<details>
+<summary><strong>Mehr zum Instandsetzungsreport</strong></summary>
 
-5. **Auf dem Gerät installieren (PWA)**:
-   - Website im Browser öffnen → Installieren/„Zum Home-Bildschirm hinzufügen“
-   - Danach komplett offline nutzbar
+- Zuerst öffnet sich das Fenster **„Deckblatt Einstellungen“**: Kennung, Saal, Straße, PLZ/Ort, Leitende EFK und Ausführungstermin. Die Angaben werden im Projekt gespeichert und mit der Sicherung exportiert.
+- Beim Ausführungstermin ist auch **„Unbekannt“** möglich – im Report steht dann `XX.XX.<aktuelles Jahr>`.
+- Mängel werden **natürlich nach Position sortiert** („A1“ vor „A2“ vor „A10“) und enthalten Material, Prüfung, Fehlerbeschreibung sowie den Hinweis zur Behebung.
+- Fotos landen in den beiden Kacheln der Vorlage: **oben Vorher-, unten Nachher-Bilder** (je bis zu 4) – als Raster 1 groß, 2 nebeneinander, 3 als 2+1, 4 als 2×2.
 
-### Neue Version veröffentlichen
+</details>
 
-1. Änderungen committen und auf `main` pushen
-2. Kurz in den **Actions**-Tab schauen, bis „Deploy to GitHub Pages“ grün ist
-3. Seite mit `Strg/Cmd + F5` neu laden – die PWA aktualisiert sich automatisch (autoUpdate)
+## Los geht's
 
-## Projektdatei-Format (.ldcproj)
+1. **[App öffnen](https://advoit.github.io/LDC_Planer/)** – es ist keine Installation und keine Anmeldung nötig.
+2. **Optional als App installieren:** am Handy „Zum Startbildschirm hinzufügen“, am Desktop das Installations-Symbol in der Adressleiste. Danach startet der Planer wie eine eigene App.
+3. **Projekt anlegen** (Name und Ort sind Pflicht) und Aufgaben erfassen – gespeichert wird automatisch.
 
-Eine `.ldcproj`-Datei ist eine **ZIP-Datei** mit folgender Struktur:
+## Speichern & Daten
+
+- **Automatisch:** Jede Änderung wird lokal gespeichert, spätestens beim Tab-Wechsel oder Schließen.
+- **Als Datei:** **Projekt → Speichern** schreibt eine ZIP-Sicherung mit allen Bildern und Dokumenten.
+- **Speicherplatz:** Die App fordert dauerhaften Speicher an und warnt, wenn es knapp wird – dann hilft eine ZIP-Sicherung.
+- **Keine Cloud:** Es gibt kein Backend. Nichts verlässt das Gerät, es sei denn, Sie geben eine Datei selbst weiter.
+
+<details>
+<summary><strong>Aufbau der Projektdatei</strong></summary>
 
 ```
 LDC-Projekt-<PROJEKT-ID>/
-├── project.json              # Projekt-Metadaten (ID, Name, Ort, Beschreibung)
+├── project.json              # Projekt-Metadaten + Dokumenten-Referenzen
+├── documents/                # Projektbezogene Unterlagen
 └── tasks/
     └── <AUFGABEN-ID>/
-        ├── task.json         # Aufgabendaten (inkl. Material, Status)
-        ├── thumbnail.png     # 60×60-Vorschaubild
-        └── images/
-            ├── <BILD-ID>.png # Vorher-Bilder
-            └── <BILD-ID>.jpg # Nachher-Bilder
+        ├── task.json         # Aufgabendaten + Dokumenten-Referenzen
+        ├── thumbnail.png
+        ├── images/           # Vorher-/Nachher-Bilder
+        └── documents/        # Aufgaben-Dokumente
 ```
 
-Bilder werden über ihren **SHA-256-Hash** der Bilddaten dedupliziert – beim Zusammenführen werden identische Bilder übersprungen, unterschiedliche angehängt.
+Bilder und Dokumente werden per **SHA-256-Hash** dedupliziert – beim Zusammenführen werden identische Dateien übersprungen, unterschiedliche angehängt. Ältere Sicherungen (`.ldcproj`) bleiben ladbar.
+
+</details>
+
+## Entwicklung
+
+**Stack:** TypeScript (strict) · Vite · Vanilla JS ohne Framework · IndexedDB · vite-plugin-pwa · fflate (ZIP) · pdf-lib (PDF) · Vitest
+
+```bash
+npm install     # Abhängigkeiten installieren
+npm run dev     # Dev-Server starten → http://localhost:5173
+npm run build   # Typecheck + Production-Build nach dist/
+npm test        # Tests ausführen
+
+npm run embed:instandsetzungs   # Instandsetzungsreport.pptx neu einbetten (nach Vorlagenänderungen)
+```
+
+Der Branch `main` wird per GitHub Actions automatisch nach GitHub Pages veröffentlicht ([Workflow](.github/workflows/deploy.yml)).
+
+<details>
+<summary><strong>Projektstruktur</strong></summary>
+
+```
+src/
+├── core/     Infrastruktur: IndexedDB (storage, project-store, recovery-store),
+│             Migration, Hashing, Bild-Komprimierung, Dateinamen, Einstellungen
+├── domain/   Fachlogik ohne UI: types, task (inkl. Duplizieren/Sammelstatus),
+│             project, task-filter, sort, merge, material
+├── io/       Dateien: ZIP-Export/-Import, PDF (pdf, pdf-cover, pdf-toc, pdf-task),
+│             Projektbericht, Aufgaben-PDF, Materialliste (PDF/CSV), PPTX-Report
+├── ui/       Oberfläche: app-state + Aktionen, Toolbar, Startseite, Projektliste,
+│             Aufgabenliste/-formular/-detail, Dialoge, Assistenten
+├── styles/   CSS (Variablen, Layout, Komponenten)
+├── app.ts    App-Shell: Init, Rendering, Verdrahtung
+└── main.ts   Einstiegspunkt + Service-Worker
+```
+
+</details>
 
 ## Lizenz
 

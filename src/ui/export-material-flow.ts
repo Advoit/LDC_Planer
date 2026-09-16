@@ -1,9 +1,8 @@
-/* ── Material-Export: Dialog mit Modi und Druck ── */
+/* ── Export-Dialog: Materialliste (PDF und CSV) ── */
 
-import { el } from './dom';
+import { el, downloadBlob, pdfBlob } from './dom';
 import { openModal } from './modal';
-import { openPrintWindow } from './print';
-import { buildMaterialReport } from '../io/material-export';
+import { showToast } from './toast';
 import type { MaterialReportOptions } from '../io/material-export';
 import type { Project } from '../domain/types';
 
@@ -50,11 +49,11 @@ export function openMaterialExportModal(project: Project): Promise<void> {
 
   return new Promise<void>((resolve) => {
     const handle = openModal({
-      title: 'Materialliste drucken',
+      title: 'Materialliste exportieren',
       content,
       actions: [
         {
-          label: 'Abbrechen',
+          label: 'Zurück',
           kind: 'secondary',
           onClick: () => {
             handle.close();
@@ -62,12 +61,42 @@ export function openMaterialExportModal(project: Project): Promise<void> {
           },
         },
         {
-          label: 'Drucken',
-          kind: 'primary',
-          onClick: () => {
-            const html = buildMaterialReport(project, opts);
+          label: 'Als CSV',
+          kind: 'secondary',
+          onClick: async () => {
             handle.close();
-            openPrintWindow(html);
+            try {
+              const { buildMaterialCsv, materialCsvFileName } = await import(
+                '../io/material-csv'
+              );
+              const csv = buildMaterialCsv(project, opts);
+              /* BOM, damit Excel die Umlaute korrekt liest */
+              const blob = new Blob(['\uFEFF' + csv], {
+                type: 'text/csv;charset=utf-8',
+              });
+              downloadBlob(blob, materialCsvFileName(project));
+              showToast('Materialliste als CSV exportiert.', 'success');
+            } catch {
+              showToast('CSV konnte nicht erstellt werden.', 'error');
+            }
+            resolve();
+          },
+        },
+        {
+          label: 'PDF erstellen',
+          kind: 'primary',
+          onClick: async () => {
+            handle.close();
+            try {
+              const { buildMaterialPdf, materialReportFileName } = await import(
+                '../io/material-export'
+              );
+              const bytes = await buildMaterialPdf(project, opts);
+              downloadBlob(pdfBlob(bytes), materialReportFileName(project));
+              showToast('Materialliste als PDF exportiert.', 'success');
+            } catch {
+              showToast('PDF konnte nicht erstellt werden.', 'error');
+            }
             resolve();
           },
         },

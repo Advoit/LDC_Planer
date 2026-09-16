@@ -1,10 +1,12 @@
-/* ── Aufgaben-Detail: Übersicht & Status-Änderung ── */
+/* ── Aufgaben-Detail: Übersicht, Schnellstatus & Status-Änderung ── */
 
-import { el, formatDateTime } from './dom';
+import { el, downloadBlob, pdfBlob } from './dom';
 import { openModal } from './modal';
 import { showToast } from './toast';
-import { openImageViewer } from './image-viewer';
 import { createImageUploader } from './image-upload';
+import { createDocumentUploader } from './document-upload';
+import { lastEditedBy, rememberEditedBy } from './status-prompt';
+import { buildTaskOverview } from './task-detail-overview';
 import { validateStatusFields, applyStatusFields } from '../domain/task';
 import type { StatusFields } from '../domain/task';
 import { TASK_STATUSES, STATUS_LABELS } from '../domain/types';
@@ -14,9 +16,12 @@ export function openTaskDetail(opts: {
   project: Project;
   taskId: string;
   onChanged: (updatedTask: Task) => void;
+  onDuplicate?: (task: Task) => void;
 }): void {
-  const task = opts.project.tasks.find((t) => t.id === opts.taskId);
-  if (!task) return;
+  const found = opts.project.tasks.find((t) => t.id === opts.taskId);
+  if (!found) return;
+  /* Explizit typisiert, damit die Verengung auch in Callbacks gilt */
+  const task: Task = found;
 
   const afterImages = createImageUploader({
     images: task.afterImages,
@@ -25,41 +30,16 @@ export function openTaskDetail(opts: {
     label: 'Nachher-Bilder',
   });
 
+  const afterDocs = createDocumentUploader({
+    documents: task.afterDocuments ?? [],
+    label: 'Nachher-Dokumente',
+    hint: 'Dokumente zur Nachbearbeitung, z. B. Berichte oder Fotos als Datei (optional).',
+  });
+
   const body = el('div', { class: 'task-detail' });
 
   /* ── Erstellungsfelder (nur lesbar) ── */
-  body.appendChild(
-    el('div', { class: 'detail-section' }, [
-      el('h3', { class: 'detail-task-name' }, [task.name]),
-      el('p', { class: 'detail-meta' }, [formatDateTime(task.createdAt)]),
-      el('p', { class: 'detail-desc' }, [task.description]),
-      task.plannedWork
-        ? el('p', { class: 'detail-meta' }, [`Geplanter Aufwand: ${task.plannedWork}`])
-        : el('div'),
-    ]),
-  );
-
-  /* Material (read-only) */
-  if (task.material.length > 0) {
-    const matList = el('ul', { class: 'detail-material' });
-    for (const m of task.material) {
-      matList.appendChild(
-        el('li', {}, [`${m.name} – ${m.quantity} ${m.unit}`]),
-      );
-    }
-    body.appendChild(el('div', { class: 'detail-section' }, [el('h4', {}, ['Material']), matList]));
-  }
-
-  /* Vorher-Bilder */
-  if (task.images.length > 0) {
-    const imgGrid = el('div', { class: 'detail-image-grid' });
-    for (const img of task.images) {
-      const thumb = el('img', { src: img.dataUrl, class: 'detail-img' });
-      thumb.addEventListener('click', () => openImageViewer(img.dataUrl));
-      imgGrid.appendChild(thumb);
-    }
-    body.appendChild(el('div', { class: 'detail-section' }, [el('h4', {}, ['Vorher-Bilder']), imgGrid]));
-  }
+  body.appendChild(buildTaskOverview(task));
 
   /* ── Status-Editor ── */
   const statusSection = el('div', { class: 'detail-section status-section' });
@@ -74,13 +54,31 @@ export function openTaskDetail(opts: {
   statusSection.appendChild(el('label', { class: 'field-label' }, ['Status']));
   statusSection.appendChild(statusSelect);
 
+  /* Schnellwechsel: Status direkt setzen (Felder werden vorbelegt) */
+  const quickRow = el('div', { class: 'quick-status' });
+  const chips = new Map<TaskStatus, HTMLButtonElement>();
+  for (const s of TASK_STATUSES) {
+    const chip = el('button', { class: 'chip', type: 'button' }, [
+      STATUS_LABELS[s],
+    ]) as HTMLButtonElement;
+    chip.addEventListener('click', () => void quickSwitch(s));
+    chips.set(s, chip);
+    quickRow.appendChild(chip);
+  }
+  statusSection.appendChild(
+    el('p', { class: 'field-hint' }, [
+      'Schnellwechsel: Status antippen – die Pflichtfelder werden mit der letzten Person und dem heutigen Datum vorbelegt.',
+    ]),
+  );
+  statusSection.appendChild(quickRow);
+
   /* Bearbeitet von */
   const editedByInput = el('input', {
     type: 'text',
     class: 'input',
     name: 'editedBy',
     placeholder: 'Name',
-    value: task.editedBy,
+    value: task.editedBy || lastEditedBy(),
   }) as HTMLInputElement;
   statusSection.appendChild(el('label', { class: 'field-label' }, ['Bearbeitet von *']));
   statusSection.appendChild(editedByInput);
@@ -108,56 +106,123 @@ export function openTaskDetail(opts: {
   /* Nachher-Bilder */
   statusSection.appendChild(afterImages.element);
 
+  /* Nachher-Dokumente */
+  statusSection.appendChild(afterDocs.element);
+
   /* Dynamische Pflichtfelder */
   const hintLabel = statusSection.querySelector('.hint-label')!;
+  /* Hinweistext: Pflicht bei „Hinweis“, bei Mängel-Aufgaben auch bei „Behoben“ */
+  const isMaengelTask = task.typ === 'maengel';
   function updateRequiredFields(): void {
     const s = statusSelect.value as TaskStatus;
     const needFields = s !== 'offen';
     editedByInput.required = needFields;
     editedAtInput.required = needFields;
-    hintLabel.classList.toggle('required', s === 'hinweis');
+    hintLabel.classList.toggle(
+      'required',
+      s === 'hinweis' || (s === 'behoben' && isMaengelTask),
+    );
+    for (const [status, chip] of chips) {
+      chip.classList.toggle('active', status === s);
+    }
   }
   statusSelect.addEventListener('change', updateRequiredFields);
   updateRequiredFields();
 
   body.appendChild(statusSection);
 
+  /* Status-Felder aus dem Formular lesen */
+  function readFields(): StatusFields {
+    return {
+      status: statusSelect.value as TaskStatus,
+      editedBy: editedByInput.value,
+      editedAt: editedAtInput.value,
+      hintText: hintTextInput.value,
+      afterImages: afterImages.getImages(),
+      afterDocuments: afterDocs.getDocuments(),
+    };
+  }
+
+  /** Prüft, speichert und schließt die Detailansicht. */
+  function saveStatus(fields: StatusFields): boolean {
+    const err = validateStatusFields(fields, task.typ);
+    if (err) {
+      showToast(err, 'error');
+      if (!hintTextInput.value.trim()) {
+        hintTextInput.focus();
+        hintTextInput.classList.add('input-error');
+      } else {
+        editedByInput.focus();
+      }
+      return false;
+    }
+    rememberEditedBy(fields.editedBy);
+    const updated = applyStatusFields(task, fields);
+    handle.close();
+    opts.onChanged(updated);
+    return true;
+  }
+
+  /** Schnellwechsel: Status setzen und – wenn erlaubt – direkt speichern. */
+  function quickSwitch(status: TaskStatus): void {
+    statusSelect.value = status;
+    updateRequiredFields();
+    saveStatus(readFields());
+  }
+
   /* ── Modal ── */
+  const actions: {
+    label: string;
+    kind: 'primary' | 'secondary' | 'danger';
+    onClick: () => void | Promise<void>;
+  }[] = [
+    {
+      label: 'Abbrechen',
+      kind: 'secondary',
+      onClick: () => handle.close(),
+    },
+  ];
+
+  if (opts.onDuplicate) {
+    actions.push({
+      label: 'Duplizieren',
+      kind: 'secondary',
+      onClick: () => {
+        handle.close();
+        opts.onDuplicate!(task);
+      },
+    });
+  }
+
+  actions.push({
+    label: 'PDF',
+    kind: 'secondary',
+    onClick: async () => {
+      try {
+        const { buildTaskPdf, taskReportFileName } = await import('../io/task-export');
+        const bytes = await buildTaskPdf(opts.project, task);
+        downloadBlob(pdfBlob(bytes), taskReportFileName(opts.project, task));
+        showToast('Aufgabe als PDF exportiert.', 'success');
+      } catch {
+        showToast('PDF konnte nicht erstellt werden.', 'error');
+      }
+    },
+  });
+
+  actions.push({
+    label: 'Speichern',
+    kind: 'primary',
+    onClick: () => {
+      saveStatus(readFields());
+    },
+  });
+
   const handle = openModal({
     title: 'Aufgabe',
     content: body,
     wide: true,
     dismissible: true,
-    actions: [
-      {
-        label: 'Abbrechen',
-        kind: 'secondary',
-        onClick: () => {
-          handle.close();
-        },
-      },
-      {
-        label: 'Speichern',
-        kind: 'primary',
-        onClick: async () => {
-          const fields: StatusFields = {
-            status: statusSelect.value as TaskStatus,
-            editedBy: editedByInput.value,
-            editedAt: editedAtInput.value,
-            hintText: hintTextInput.value,
-            afterImages: afterImages.getImages(),
-          };
-          const err = validateStatusFields(fields);
-          if (err) {
-            showToast(err, 'error');
-            return;
-          }
-          const updated = applyStatusFields(task, fields);
-          handle.close();
-          opts.onChanged(updated);
-        },
-      },
-    ],
+    actions,
   });
 }
 

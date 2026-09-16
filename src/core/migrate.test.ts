@@ -22,7 +22,33 @@ describe('migrateProject', () => {
     expect(project.tasks[0].images).toEqual([]);
     expect(project.tasks[0].afterImages).toEqual([]);
     expect(project.tasks[0].material).toEqual([]);
+    expect(project.tasks[0].documents).toEqual([]);
+    /* Personalbedarf fehlt in alten Daten → Standard 1 */
+    expect(project.tasks[0].personnel).toBe(1);
+    /* Mängel-/Umbau-Felder: alte Aufgaben gelten als Mängel, Rest leer */
+    expect(project.tasks[0].typ).toBe('maengel');
+    expect(project.tasks[0].art).toBe('');
+    expect(project.tasks[0].pruefung).toBe('');
+    expect(project.tasks[0].fehlerbeschreibung).toBe('');
+    expect(project.tasks[0].position).toBe('');
+    expect(project.documents).toEqual([]);
     expect(project.tasks[1].status).toBe('hinweis');
+  });
+
+  it('übernimmt Deckblatt-Einstellungen und lässt alte Daten ohne sie durchlaufen', () => {
+    const cover = {
+      kennung: 'OBJ-1',
+      saal: 'Saal 2',
+      strasse: 'Musterstr. 3',
+      plzOrt: '12345 Stadt',
+      efkName: 'E. F. K.',
+      termin: '2026-09-01',
+    };
+    expect(migrateProject({ id: 'X', reportCover: cover }).reportCover).toEqual(cover);
+    /* Ohne Feld (alte Daten) bleibt reportCover undefiniert */
+    expect(migrateProject({ id: 'Y' }).reportCover).toBeUndefined();
+    /* Ungültige Daten werden verworfen */
+    expect(migrateProject({ id: 'Z', reportCover: { kennung: 5 } }).reportCover).toBeUndefined();
   });
 
   it('wirft bei unbekannter zukünftiger Version einen Fehler', () => {

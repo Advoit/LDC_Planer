@@ -1,7 +1,8 @@
-/* ── Projekt-Export: saubere .ldcproj-ZIP mit Ordnerstruktur ── */
+/* ── Projekt-Export: saubere ZIP mit Ordnerstruktur ── */
 
 import { strToU8, zipSync } from 'fflate';
-import type { Project, Task, TaskImage } from '../domain/types';
+import { exportBaseName } from '../core/file-name';
+import type { Project, ProjectDocument, ReportCover, Task, TaskImage } from '../domain/types';
 
 const MIME_EXT: Readonly<Record<string, string>> = {
   'image/png': '.png',
@@ -9,6 +10,16 @@ const MIME_EXT: Readonly<Record<string, string>> = {
   'image/webp': '.webp',
   'image/gif': '.gif',
   'image/svg+xml': '.svg',
+  'application/pdf': '.pdf',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.ms-excel': '.xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'text/plain': '.txt',
+  'text/csv': '.csv',
+  'application/zip': '.zip',
 };
 
 export interface ImageRef {
@@ -29,11 +40,28 @@ export interface ExportedTask {
   thumbnailSourceId: string | null;
   material: Task['material'];
   plannedWork: string;
+  personnel: number;
+  typ: Task['typ'];
+  art: string;
+  pruefung: string;
+  fehlerbeschreibung: string;
+  position: string;
   status: Task['status'];
   editedBy: string;
   editedAt: string;
   hintText: string;
   afterImages: ImageRef[];
+  documents: DocumentRef[];
+  afterDocuments: DocumentRef[];
+}
+
+export interface DocumentRef {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  hash: string;
+  file: string;
 }
 
 export interface ExportedProject {
@@ -44,6 +72,8 @@ export interface ExportedProject {
   description: string;
   createdAt: string;
   updatedAt: string;
+  documents: DocumentRef[];
+  reportCover?: ReportCover; // Deckblatt-Einstellungen des Instandsetzungsreports
 }
 
 export function dataUrlToBytes(dataUrl: string): Uint8Array {
@@ -65,16 +95,36 @@ function imageRef(img: TaskImage, dir: string): ImageRef {
   return { id: img.id, hash: img.hash, file: `${dir}/${img.id}${ext}` };
 }
 
+function documentRef(doc: ProjectDocument, dir: string): DocumentRef {
+  const ext = MIME_EXT[doc.mime.toLowerCase()] ?? extensionFromName(doc.name);
+  return {
+    id: doc.id,
+    name: doc.name,
+    mime: doc.mime,
+    size: doc.size,
+    hash: doc.hash,
+    file: `${dir}/${doc.id}${ext}`,
+  };
+}
+
+function extensionFromName(name: string): string {
+  const m = /\.([a-z0-9]{1,5})$/i.exec(name);
+  return m ? `.${m[1].toLowerCase()}` : '.bin';
+}
+
 /**
- * Baut die .ldcproj-Datei (ZIP) mit folgender Struktur:
+ * Baut die Projekt-ZIP-Datei mit folgender Struktur:
  *   LDC-Projekt-<ID>/
  *     project.json
  *     tasks/<Task-ID>/
  *       task.json
  *       thumbnail.png
  *       images/<Bild-ID>.png|.jpg|…
+ *
+ * Hinweis: Alte .ldcproj-Backups sind identische ZIP-Dateien und
+ * bleiben weiterhin ladbar.
  */
-export function buildLdcproj(project: Project): Blob {
+export function buildProjectZip(project: Project): Blob {
   const files: Record<string, Uint8Array> = {};
   const root = `LDC-Projekt-${project.id}`;
 
@@ -86,10 +136,21 @@ export function buildLdcproj(project: Project): Blob {
     description: project.description,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
+    documents: (project.documents ?? []).map((doc) =>
+      documentRef(doc, 'documents'),
+    ),
+    /* Nur mitgeben, wenn gesetzt – alte Sicherungen bleiben unverändert */
+    ...(project.reportCover ? { reportCover: project.reportCover } : {}),
   };
   files[`${root}/project.json`] = strToU8(
     JSON.stringify(exportedProject, null, 2),
   );
+
+  /* Projektbezogene Unterlagen */
+  for (const doc of project.documents ?? []) {
+    const ext = MIME_EXT[doc.mime.toLowerCase()] ?? extensionFromName(doc.name);
+    files[`${root}/documents/${doc.id}${ext}`] = dataUrlToBytes(doc.dataUrl);
+  }
 
   for (const task of project.tasks) {
     const dir = `${root}/tasks/${task.id}`;
@@ -105,11 +166,23 @@ export function buildLdcproj(project: Project): Blob {
       thumbnailSourceId: task.thumbnailSourceId,
       material: task.material,
       plannedWork: task.plannedWork,
+      personnel: task.personnel ?? 1,
+      typ: task.typ ?? 'maengel',
+      art: task.art ?? '',
+      pruefung: task.pruefung ?? '',
+      fehlerbeschreibung: task.fehlerbeschreibung ?? '',
+      position: task.position ?? '',
       status: task.status,
       editedBy: task.editedBy,
       editedAt: task.editedAt,
       hintText: task.hintText,
       afterImages: task.afterImages.map((img) => imageRef(img, 'images')),
+      documents: (task.documents ?? []).map((doc) =>
+        documentRef(doc, 'documents'),
+      ),
+      afterDocuments: (task.afterDocuments ?? []).map((doc) =>
+        documentRef(doc, 'documents'),
+      ),
     };
     files[`${dir}/task.json`] = strToU8(JSON.stringify(exportedTask, null, 2));
 
@@ -124,6 +197,14 @@ export function buildLdcproj(project: Project): Blob {
     if (task.thumbnail) {
       files[`${dir}/thumbnail.png`] = dataUrlToBytes(task.thumbnail);
     }
+    for (const doc of task.documents ?? []) {
+      const ext = MIME_EXT[doc.mime.toLowerCase()] ?? extensionFromName(doc.name);
+      files[`${dir}/documents/${doc.id}${ext}`] = dataUrlToBytes(doc.dataUrl);
+    }
+    for (const doc of task.afterDocuments ?? []) {
+      const ext = MIME_EXT[doc.mime.toLowerCase()] ?? extensionFromName(doc.name);
+      files[`${dir}/documents/${doc.id}${ext}`] = dataUrlToBytes(doc.dataUrl);
+    }
   }
 
   const zipped = zipSync(files, { level: 6 });
@@ -131,10 +212,6 @@ export function buildLdcproj(project: Project): Blob {
 }
 
 /** Dateiname für den Download (Projektname + ID, sicher bereinigt). */
-export function ldcprojFileName(project: Project): string {
-  const safeName = project.name
-    .replace(/[^a-zA-Z0-9äöüÄÖÜß _-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-');
-  return `LDC-${safeName || 'Projekt'}-${project.id}.ldcproj`;
+export function projectZipFileName(project: Project): string {
+  return `${exportBaseName(project.name, project.id)}.zip`;
 }
