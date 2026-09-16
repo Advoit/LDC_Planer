@@ -16,6 +16,8 @@ import {
 } from './pptx-photo-tiles';
 import type { SlideMedia } from './pptx-photo-tiles';
 import { comparePositions } from '../domain/sort';
+import { createUiYielder, reportProgress } from '../core/progress';
+import type { ProgressReporter } from '../core/progress';
 import type { Project, Task, TaskImage } from '../domain/types';
 import type { ReportCover } from '../domain/types';
 
@@ -71,6 +73,7 @@ export async function getInstandsetzungsreportTemplateBytes(): Promise<Uint8Arra
 export async function buildInstandsetzungsreportPptx(
   project: Project,
   opts: InstandsetzungsreportOptions,
+  onProgress?: ProgressReporter,
 ): Promise<Uint8Array> {
   const files = unzipSync(await getInstandsetzungsreportTemplateBytes());
   const decode = (path: string): string =>
@@ -97,12 +100,21 @@ export async function buildInstandsetzungsreportPptx(
   let presRels = decode('ppt/_rels/presentation.xml.rels');
   let appXml = decode('docProps/app.xml');
 
+  const yieldUi = createUiYielder();
   let slideNo = 3; // slide1 ist das Deckblatt, Reportseiten ab slide3
   let relId = 100; // freie Relationship-IDs (Vorlage nutzt rId1–rId12)
   let sldId = 1000; // freie Folien-IDs
   let mediaNo = 3; // Vorlage hat bereits media1.png + media2.png
 
-  for (const task of maengel) {
+  for (const [index, task] of maengel.entries()) {
+    /* Fortschritt je Reportseite (inkl. Aufbereitung der Fotos) */
+    reportProgress(
+      onProgress,
+      `Reportseite ${index + 1} von ${maengel.length}`,
+      index,
+      maengel.length,
+    );
+    await yieldUi();
     /* Vorher- und Nachher-Fotos getrennt aufbereiten (obere/untere Kachel) */
     const media: SlideMedia[] = [];
     const mediaBefore: SlideMedia[] = [];

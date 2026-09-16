@@ -3,6 +3,7 @@
 import { el, downloadBlob } from './dom';
 import { openModal } from './modal';
 import { showToast } from './toast';
+import { withProgress } from './progress';
 import { getPreference, setPreference } from '../core/preferences';
 import type { Project, ReportCover } from '../domain/types';
 
@@ -148,11 +149,13 @@ export function openInstandsetzungsreportModal(
                Einstellungen) – die Einstellungen liegen jetzt im Projekt. */
             setPreference('instandsetzungsreport.cover', cover);
             handle.close();
-            showToast('Instandsetzungsreport wird erstellt…', 'info');
             try {
               const { buildInstandsetzungsreportPptx, instandsetzungsreportFileName } =
                 await import('../io/instandsetzungsreport');
-              const bytes = await buildInstandsetzungsreportPptx(project, { cover });
+              const bytes = await withProgress(
+                'Instandsetzungsreport wird erstellt …',
+                (report) => buildInstandsetzungsreportPptx(project, { cover }, report),
+              );
               downloadBlob(
                 new Blob([bytes.slice()], {
                   type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',

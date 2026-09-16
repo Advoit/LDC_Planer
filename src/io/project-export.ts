@@ -27,6 +27,8 @@ import {
   drawTaskSection,
   newPage,
 } from './pdf-task';
+import { createUiYielder, reportProgress } from '../core/progress';
+import type { ProgressReporter } from '../core/progress';
 
 export interface ProjectExportOptions {
   /** Zu exportierende Status (leer = alle). */
@@ -141,6 +143,7 @@ function sectionEntries(project: Project, contentPage: number): {
 export async function buildProjectPdf(
   project: Project,
   opts: ProjectExportOptions,
+  onProgress?: ProgressReporter,
 ): Promise<Uint8Array> {
   const now = new Date().toLocaleDateString('de-DE', {
     day: '2-digit',
@@ -167,6 +170,13 @@ export async function buildProjectPdf(
     contentStartPage,
   );
 
+  /* Fortschritt über alle exportierten Aufgaben hinweg melden */
+  const totalTasks = groups.reduce((sum, group) => sum + group.tasks.length, 0);
+  const yieldUi = createUiYielder();
+  let doneTasks = 0;
+  reportProgress(onProgress, 'Bericht wird erstellt …', 0, totalTasks);
+  await yieldUi();
+
   /* Jede Statusgruppe beginnt auf einer neuen Seite, jede weitere Aufgabe ebenfalls. */
   for (let gi = 0; gi < groups.length; gi++) {
     const group = groups[gi];
@@ -188,6 +198,14 @@ export async function buildProjectPdf(
         page: startPage,
         indent: true,
       });
+      doneTasks += 1;
+      reportProgress(
+        onProgress,
+        `Aufgabe ${doneTasks} von ${totalTasks}`,
+        doneTasks,
+        totalTasks,
+      );
+      await yieldUi();
     }
   }
 

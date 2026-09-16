@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildProjectZip } from './export';
 import { parseProjectZip } from './import';
 import { hashDataUrl } from '../core/hash';
+import type { ProgressUpdate } from '../core/progress';
 import type { Project, Task } from '../domain/types';
 
 function tinyPngDataUrl(): string {
@@ -146,5 +147,18 @@ describe('Export/Import-Roundtrip', () => {
   it('liefert null bei ungültigen Daten', async () => {
     const junk = new TextEncoder().encode('kein zip').buffer;
     expect(await parseProjectZip(junk)).toBeNull();
+  });
+
+  it('meldet beim Import den Fortschritt (Text und Anteil bis 100 %)', async () => {
+    const project = await makeProject();
+    const buffer = await buildProjectZip(project).arrayBuffer();
+    const seen: ProgressUpdate[] = [];
+
+    const imported = await parseProjectZip(buffer, (update) => seen.push(update));
+    expect(imported).not.toBeNull();
+
+    expect(seen.some((u) => u.label.includes('ZIP wird entpackt'))).toBe(true);
+    expect(seen.some((u) => u.label.includes('Aufgaben werden gelesen'))).toBe(true);
+    expect(seen[seen.length - 1].ratio).toBe(1);
   });
 });

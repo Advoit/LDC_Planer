@@ -18,6 +18,7 @@ import { migrateProject } from '../core/migrate';
 import { touchProject } from '../domain/project';
 import { buildProjectZip, projectZipFileName } from '../io/export';
 import { parseProjectZip } from '../io/import';
+import { withProgress } from './progress';
 import {
   activateProject,
   closeProject,
@@ -53,7 +54,9 @@ export async function openProject(id: string): Promise<void> {
     showToast('Dieses Projekt ist bereits geöffnet.', 'info');
     return;
   }
-  const raw = await loadProject(id);
+  const raw = await withProgress('Projekt wird geladen …', () =>
+    loadProject(id),
+  );
   if (!raw) {
     showToast('Projekt konnte nicht geladen werden.', 'error');
     await refreshSummaries();
@@ -76,11 +79,16 @@ export async function removeProject(id: string): Promise<void> {
 }
 
 export async function saveZip(): Promise<void> {
-  if (!state.project) return;
-  await persist();
-  downloadBlob(
-    buildProjectZip(state.project),
-    projectZipFileName(state.project),
+  const project = state.project;
+  if (!project) return;
+  /* Das ZIP-Packen blockiert den Main-Thread – daher Anzeige sofort einblenden. */
+  await withProgress(
+    'Projekt-ZIP wird erstellt …',
+    async () => {
+      await persist();
+      downloadBlob(buildProjectZip(project), projectZipFileName(project));
+    },
+    { immediate: true },
   );
   showToast('Projekt exportiert.', 'success');
 }
@@ -96,7 +104,9 @@ export async function loadZip(): Promise<void> {
 export async function importProjectFile(file: File): Promise<void> {
   let imported: Project | null = null;
   try {
-    imported = await parseProjectZip(await file.arrayBuffer());
+    imported = await withProgress('Projekt wird geladen …', async (report) =>
+      parseProjectZip(await file.arrayBuffer(), report),
+    );
   } catch {
     imported = null;
   }

@@ -3,6 +3,7 @@
 import { el, downloadBlob, pdfBlob } from './dom';
 import { openModal } from './modal';
 import { showToast } from './toast';
+import { withProgress } from './progress';
 import { createImageUploader } from './image-upload';
 import { createDocumentUploader } from './document-upload';
 import { lastEditedBy, rememberEditedBy } from './status-prompt';
@@ -200,7 +201,9 @@ export function openTaskDetail(opts: {
     onClick: async () => {
       try {
         const { buildTaskPdf, taskReportFileName } = await import('../io/task-export');
-        const bytes = await buildTaskPdf(opts.project, task);
+        const bytes = await withProgress('Aufgaben-PDF wird erstellt …', async () =>
+          buildTaskPdf(opts.project, task),
+        );
         downloadBlob(pdfBlob(bytes), taskReportFileName(opts.project, task));
         showToast('Aufgabe als PDF exportiert.', 'success');
       } catch {

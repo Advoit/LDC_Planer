@@ -6,6 +6,7 @@ import { buildStartScreen } from './ui/start-screen';
 import { buildMobileNavigation, buildToolbar } from './ui/app-toolbar';
 import type { ToolbarHandlers } from './ui/app-toolbar';
 import { initState, setRenderer, state, toggleEditMode } from './ui/app-state';
+import { withProgress } from './ui/progress';
 import {
   importProjectFile,
   loadZip,
@@ -34,7 +35,11 @@ const appEl = document.getElementById('app')!;
 
 export async function initApp(): Promise<void> {
   setRenderer(renderApp);
-  await initState();
+  /* Große Projekte brauchen beim Start einen Moment – kurze Starts bleiben
+     ohne Anzeige, weil sie erst nach ~0,2 s erscheint. */
+  await withProgress('Projekt wird geladen …', async () => {
+    await initState();
+  });
   renderApp();
 }
 

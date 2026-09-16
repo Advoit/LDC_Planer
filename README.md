@@ -49,6 +49,10 @@ Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben e
 - **Papierkorb** für gelöschte Aufgaben (max. 10) – inklusive „Rückgängig“ direkt nach dem Löschen
 - **Sicherungsstände**: vor Überschreiben, Zusammenführen und Wiederherstellen wird automatisch ein Stand gesichert
 
+**⏳ Ladeanzeige**
+- **Fortschrittsbalken** bei allen langen Vorgängen: Projekt laden oder importieren, Projektbericht, Materialliste, Aufgaben-PDF, Instandsetzungsreport und ZIP-Sicherung – mit Prozentangabe und Zähler („Aufgabe 12 von 40“)
+- **Kein Aufblitzen**: kurze Vorgänge (unter ~0,2 s) laufen ohne Anzeige durch
+
 ## Exporte
 
 | Export | Inhalt | Datei |
@@ -121,13 +125,14 @@ Der Branch `main` wird per GitHub Actions automatisch nach GitHub Pages veröffe
 ```
 src/
 ├── core/     Infrastruktur: IndexedDB (storage, project-store, recovery-store),
-│             Migration, Hashing, Bild-Komprimierung, Dateinamen, Einstellungen
+│             Migration, Hashing, Bild-Komprimierung, Dateinamen, Fortschritt,
+│             Einstellungen
 ├── domain/   Fachlogik ohne UI: types, task (inkl. Duplizieren/Sammelstatus),
 │             project, task-filter, sort, merge, material
 ├── io/       Dateien: ZIP-Export/-Import, PDF (pdf, pdf-cover, pdf-toc, pdf-task),
 │             Projektbericht, Aufgaben-PDF, Materialliste (PDF/CSV), PPTX-Report
 ├── ui/       Oberfläche: app-state + Aktionen, Toolbar, Startseite, Projektliste,
-│             Aufgabenliste/-formular/-detail, Dialoge, Assistenten
+│             Aufgabenliste/-formular/-detail, Dialoge, Ladeanzeige, Assistenten
 ├── styles/   CSS (Variablen, Layout, Komponenten)
 ├── app.ts    App-Shell: Init, Rendering, Verdrahtung
 └── main.ts   Einstiegspunkt + Service-Worker

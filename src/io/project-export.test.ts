@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { PDFArray, PDFDict, PDFDocument, PDFName } from 'pdf-lib';
 import { buildProjectPdf } from './project-export';
 import { TASK_STATUSES } from '../domain/types';
+import type { ProgressUpdate } from '../core/progress';
 import type { Project, Task, TaskStatus } from '../domain/types';
 
 function makeProject(): Project {
@@ -194,5 +195,25 @@ describe('buildProjectPdf', () => {
     const dest = annot.lookup(PDFName.of('Dest'), PDFArray);
     const target = dest.get(0).toString();
     expect(pdf.getPages().map((p) => p.ref.toString())).toContain(target);
+  });
+
+  it('meldet den Fortschritt je Aufgabe (Anteil steigt bis 100 %)', async () => {
+    const project = makeManyTaskProject(4, ['offen']);
+    const seen: ProgressUpdate[] = [];
+
+    await buildProjectPdf(
+      project,
+      { statuses: new Set(TASK_STATUSES) },
+      (update) => seen.push(update),
+    );
+
+    const ratios = seen
+      .filter((u) => u.ratio !== undefined)
+      .map((u) => u.ratio as number);
+    expect(ratios.length).toBeGreaterThanOrEqual(4);
+    expect(ratios[ratios.length - 1]).toBe(1);
+    /* Die Anteile steigen monoton (kein Rücksprung in der Anzeige) */
+    expect(ratios).toEqual([...ratios].sort((a, b) => a - b));
+    expect(seen.some((u) => u.label === 'Aufgabe 4 von 4')).toBe(true);
   });
 });

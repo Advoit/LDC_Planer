@@ -3,6 +3,7 @@
 import { el, downloadBlob, pdfBlob } from './dom';
 import { openModal } from './modal';
 import { showToast } from './toast';
+import { withProgress } from './progress';
 import type { MaterialReportOptions } from '../io/material-export';
 import type { Project } from '../domain/types';
 
@@ -69,7 +70,9 @@ export function openMaterialExportModal(project: Project): Promise<void> {
               const { buildMaterialCsv, materialCsvFileName } = await import(
                 '../io/material-csv'
               );
-              const csv = buildMaterialCsv(project, opts);
+              const csv = await withProgress('Materialliste wird erstellt …',
+                async () => buildMaterialCsv(project, opts),
+              );
               /* BOM, damit Excel die Umlaute korrekt liest */
               const blob = new Blob(['\uFEFF' + csv], {
                 type: 'text/csv;charset=utf-8',
@@ -91,7 +94,10 @@ export function openMaterialExportModal(project: Project): Promise<void> {
               const { buildMaterialPdf, materialReportFileName } = await import(
                 '../io/material-export'
               );
-              const bytes = await buildMaterialPdf(project, opts);
+              const bytes = await withProgress(
+                'Materialliste wird erstellt …',
+                async () => buildMaterialPdf(project, opts),
+              );
               downloadBlob(pdfBlob(bytes), materialReportFileName(project));
               showToast('Materialliste als PDF exportiert.', 'success');
             } catch {

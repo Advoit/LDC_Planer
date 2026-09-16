@@ -3,6 +3,7 @@
 import { el, downloadBlob, pdfBlob } from './dom';
 import { openModal } from './modal';
 import { showToast } from './toast';
+import { withProgress } from './progress';
 import type { ProjectExportOptions } from '../io/project-export';
 import { STATUS_LABELS, TASK_STATUSES } from '../domain/types';
 import type { Project, TaskStatus } from '../domain/types';
@@ -83,7 +84,10 @@ export function openProjectExportModal(
               const { buildProjectPdf, projectReportFileName } = await import(
                 '../io/project-export'
               );
-              const bytes = await buildProjectPdf(project, opts);
+              const bytes = await withProgress(
+                'Projektbericht wird erstellt …',
+                (report) => buildProjectPdf(project, opts, report),
+              );
               downloadBlob(pdfBlob(bytes), projectReportFileName(project));
               showToast('Projektbericht als PDF exportiert.', 'success');
             } catch {

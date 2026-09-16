@@ -5,6 +5,8 @@ import type { Project, ProjectDocument, Task, TaskImage } from '../domain/types'
 import { sha256Hex } from '../core/hash';
 import type { ExportedProject, ExportedTask, DocumentRef, ImageRef } from './export';
 import { migrateProject } from '../core/migrate';
+import { createUiYielder, reportProgress } from '../core/progress';
+import type { ProgressReporter } from '../core/progress';
 
 function bytesToBase64(bytes: Uint8Array): string {
   const chunkSize = 0x8000;
@@ -93,9 +95,13 @@ async function rebuildTasks(
   fileMap: Map<string, Uint8Array>,
   exportedTasks: ExportedTask[],
   root: string,
+  /** Wird je Aufgabe aufgerufen – für Fortschrittsmeldung und UI-Freigabe. */
+  onStep?: (index: number) => Promise<void>,
 ): Promise<Task[]> {
   const tasks: Task[] = [];
-  for (const et of exportedTasks) {
+  for (let i = 0; i < exportedTasks.length; i++) {
+    const et = exportedTasks[i];
+    if (onStep) await onStep(i);
     const taskDir = `${root}/tasks/${et.id}`;
     const images = await loadImages(fileMap, et.images, taskDir);
     const afterImages = await loadImages(fileMap, et.afterImages, taskDir);
@@ -145,7 +151,12 @@ async function rebuildTasks(
 
 export async function parseProjectZip(
   buffer: ArrayBuffer,
+  onProgress?: ProgressReporter,
 ): Promise<Project | null> {
+  const yieldUi = createUiYielder();
+  reportProgress(onProgress, 'ZIP wird entpackt …');
+  await yieldUi();
+
   const data = new Uint8Array(buffer);
   let unzipped: Record<string, Uint8Array>;
   try {
@@ -190,12 +201,35 @@ export async function parseProjectZip(
     }
   }
 
-  const tasks = await rebuildTasks(fileMap, exportedTasks, root);
+  /* Fortschritt: eine Stufe je Aufgabe + eine für die Projekt-Unterlagen */
+  const total = exportedTasks.length + 1;
+  const tasks = await rebuildTasks(
+    fileMap,
+    exportedTasks,
+    root,
+    async (index) => {
+      reportProgress(
+        onProgress,
+        `Aufgaben werden gelesen … (${index + 1}/${exportedTasks.length})`,
+        index,
+        total,
+      );
+      await yieldUi();
+    },
+  );
+  reportProgress(
+    onProgress,
+    'Projekt-Unterlagen werden gelesen …',
+    exportedTasks.length,
+    total,
+  );
+  await yieldUi();
   const documents = await loadDocuments(
     fileMap,
     exportedProject.documents ?? [],
     root,
   );
+  reportProgress(onProgress, 'Projektdatei wird vorbereitet …', total, total);
 
   const project: Project = migrateProject({
     schemaVersion: exportedProject.schemaVersion,
