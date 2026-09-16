@@ -10,6 +10,8 @@ export interface BulkBarOptions {
   onExport: (ids: string[]) => void;
   /** Auswahl aller sichtbaren Aufgaben umschalten (Liste zeichnet danach neu). */
   onToggleAll: () => void;
+  /** Auswahlmodus verlassen. */
+  onExit: () => void;
 }
 
 export interface BulkBarHandle {
@@ -33,6 +35,7 @@ export function createBulkBar(opts: BulkBarOptions): BulkBarHandle {
     element.appendChild(
       el('span', { class: 'bulk-count' }, [`${ids.length} ausgewählt`]),
     );
+
 
     const statusSelect = el('select', { class: 'input bulk-status' }) as HTMLSelectElement;
     statusSelect.appendChild(el('option', { value: '' }, ['Status ändern …']));
@@ -69,6 +72,15 @@ export function createBulkBar(opts: BulkBarOptions): BulkBarHandle {
     ]);
     allBtn.addEventListener('click', () => opts.onToggleAll());
     element.appendChild(allBtn);
+
+    const closeBtn = el('button', {
+      class: 'icon-btn bulk-close',
+      type: 'button',
+      title: 'Auswahl beenden',
+      'aria-label': 'Auswahl beenden',
+    }, [icon('x')]);
+    closeBtn.addEventListener('click', () => opts.onExit());
+    element.appendChild(closeBtn);
   }
 
   return { element, update };

@@ -24,6 +24,7 @@ export interface TaskListOptions {
 let taskListProjectId: string | null = null;
 let filter: TaskFilter = defaultTaskFilter();
 let selectionMode = false;
+let panelOpen = false;
 const selectedIds = new Set<string>();
 
 export function renderTaskList(container: HTMLElement, opts: TaskListOptions): void {
@@ -33,6 +34,7 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
     taskListProjectId = opts.project.id;
     filter = defaultTaskFilter();
     selectionMode = false;
+    panelOpen = false;
     selectedIds.clear();
   }
 
@@ -44,13 +46,18 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
     el('span', { class: 'filter-toggle-label' }, ['Suche & Filter']),
     icon('chevron'),
   ]) as HTMLButtonElement;
-  toggleBtn.addEventListener('click', () => {
-    const open = controls.classList.toggle('filter-open');
-    toggleBtn.classList.toggle('open', open);
-  });
-  controls.appendChild(toggleBtn);
+  const listCount = el('span', { class: 'list-count' });
+  toggleBtn.addEventListener('click', () => setPanelOpen(!panelOpen));
+  controls.appendChild(el('div', { class: 'list-header' }, [toggleBtn, listCount]));
 
   const panel = el('div', { class: 'list-filter-panel' });
+
+  /** Panel-Zustand merken (bleibt bei Neuzeichnungen erhalten). */
+  function setPanelOpen(open: boolean): void {
+    panelOpen = open;
+    controls.classList.toggle('filter-open', panelOpen);
+    toggleBtn.classList.toggle('open', panelOpen);
+  }
 
   const searchInput = el('input', {
     type: 'search',
@@ -64,6 +71,7 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
   });
 
   const statusRow = el('div', { class: 'filter-row' });
+  statusRow.appendChild(el('span', { class: 'filter-label' }, ['Status']));
   for (const status of ['offen', 'hinweis', 'behoben'] as TaskStatus[]) {
     const chip = el('button', { class: 'chip', type: 'button' }, [
       STATUS_LABELS[status],
@@ -97,12 +105,13 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
     renderList();
   });
 
-  panel.appendChild(searchInput);
-  panel.appendChild(el('div', { class: 'filter-sort-row' }, [statusRow, sortSelect]));
+  const sortRow = el('div', { class: 'filter-row' });
+  sortRow.appendChild(el('span', { class: 'filter-label' }, ['Sortierung']));
+  sortRow.appendChild(sortSelect);
 
   /* Typ-Filter: Mängel / Umbau/Neuinstallation (Standard: beide eingeblendet) */
   const typRow = el('div', { class: 'filter-row' });
-  typRow.appendChild(el('span', { class: 'filter-label' }, ['Typ:']));
+  typRow.appendChild(el('span', { class: 'filter-label' }, ['Typ']));
   for (const typ of TASK_TYPS) {
     const chip = el('button', { class: 'chip', type: 'button' }, [
       TASK_TYP_LABELS[typ],
@@ -118,21 +127,43 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
     });
     typRow.appendChild(chip);
   }
-  panel.appendChild(typRow);
-  controls.appendChild(panel);
 
-  /* Auswahlmodus für Sammelaktionen */
+  const searchRow = el('div', { class: 'filter-row' });
+  searchRow.appendChild(el('span', { class: 'filter-label' }, ['Suche']));
+  searchRow.appendChild(searchInput);
+
+  panel.appendChild(searchRow);
+  panel.appendChild(statusRow);
+  panel.appendChild(typRow);
+  panel.appendChild(sortRow);
+
+  /* Auswahlmodus für Sammelaktionen (gehört zu Suche & Filter) */
   const selectToggle = el('button', {
     class: 'btn btn-secondary btn-sm select-toggle',
     type: 'button',
   }, [icon('check-square'), el('span', { class: 'btn-select-label' }, [' Auswählen'])]);
   selectToggle.addEventListener('click', () => {
     selectionMode = !selectionMode;
-    if (!selectionMode) selectedIds.clear();
+    if (selectionMode) {
+      /* Auswahlmodus einblenden, damit „Fertig“ sofort sichtbar ist */
+      setPanelOpen(true);
+    } else {
+      selectedIds.clear();
+    }
     renderList();
   });
-  controls.appendChild(el('div', { class: 'list-actions' }, [selectToggle]));
 
+  panel.appendChild(
+    el('div', { class: 'selection-box' }, [
+      selectToggle,
+      el('span', { class: 'selection-hint' }, [
+        'Mehrere Aufgaben gleichzeitig ändern, exportieren oder löschen.',
+      ]),
+    ]),
+  );
+  controls.appendChild(panel);
+
+  setPanelOpen(panelOpen);
   container.appendChild(controls);
 
   /* ── Ergebnisliste ── */
@@ -149,6 +180,11 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
       else for (const task of visible) selectedIds.add(task.id);
       renderList();
     },
+    onExit: () => {
+      selectionMode = false;
+      selectedIds.clear();
+      renderList();
+    },
   });
   container.appendChild(bulkBar.element);
 
@@ -163,11 +199,23 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
   function renderList(): void {
     clear(listEl);
     const tasks = filterTasks(opts.project.tasks, filter);
+    const total = opts.project.tasks.length;
+
+    listCount.textContent =
+      tasks.length === total
+        ? `${total} ${total === 1 ? 'Aufgabe' : 'Aufgaben'}`
+        : `${tasks.length} von ${total} Aufgaben`;
+    toggleBtn.classList.toggle('has-filters', tasks.length !== total);
 
     selectToggle.classList.toggle('active', selectionMode);
     const labelEl = selectToggle.querySelector('.btn-select-label');
-    if (labelEl) labelEl.textContent = selectionMode ? ' Fertig' : ' Auswählen';
+    if (labelEl) labelEl.textContent = selectionMode ? ' Auswahl beenden' : ' Auswählen';
 
+    /* Platz am Ende der Liste, damit die fixierte Aktionsleiste nichts verdeckt;
+       die Markierung am Body hält Toasts oberhalb der Leiste. */
+    const barOpen = selectionMode && selectedIds.size > 0;
+    container.classList.toggle('bulk-open', barOpen);
+    document.body.classList.toggle('bulk-open', barOpen);
     bulkBar.update(selectedIds, tasks.length);
 
     if (tasks.length === 0) {

@@ -41,6 +41,8 @@ export async function initApp(): Promise<void> {
 /* ── Rendering ── */
 
 function renderApp(): void {
+  /* Sichtbarkeit der Sammel-Leiste wird beim Aufbau der Liste neu gesetzt */
+  document.body.classList.remove('bulk-open');
   clear(appEl);
   appEl.appendChild(buildToolbar(toolbarOptions()));
   buildMain();

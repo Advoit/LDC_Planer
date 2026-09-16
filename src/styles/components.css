@@ -343,14 +343,11 @@
   margin-top: 8px;
 }
 
-/* Auswahlmodus & Sammelaktionen */
+/* ── Auswahlmodus & Sammelaktionen ──
+   Die Aktionsleiste liegt fixiert am unteren Rand, damit sie beim Markieren
+   sofort sichtbar ist – auch ohne bis zum Listenende zu scrollen. */
 
-.list-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 var(--gap) 8px;
-}
+.select-toggle { width: 100%; justify-content: center; }
 
 .select-toggle.active {
   border-color: var(--blue);
@@ -375,22 +372,41 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin: var(--gap) var(--gap) 0;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 2 * var(--gap)));
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 400;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card-bg);
-  box-shadow: var(--shadow-md);
-  position: sticky;
-  bottom: calc(var(--gap) + 64px);
-  z-index: 20;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--card-bg) 94%, transparent);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  box-shadow: var(--shadow-lg);
 }
 
 .bulk-bar.open { display: flex; }
 
 .bulk-count { font-size: 13px; font-weight: 600; margin-right: auto; }
 
-.bulk-status { width: auto; min-width: 150px; padding: 6px 10px; font-size: 13px; }
+.bulk-status { width: auto; min-width: 140px; padding: 6px 10px; font-size: 13px; }
+
+.bulk-close .icon { width: 16px; height: 16px; }
+
+/* Platz am Listenende, damit die Leiste die letzten Aufgaben nicht verdeckt */
+.main-view.bulk-open { padding-bottom: 110px; }
+
+/* Hinweise (Toasts) oberhalb der Leiste einblenden */
+body.bulk-open .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
+
+/* Desktop: keine Mobile-Navbar → Leiste sitzt direkt am unteren Rand */
+@media (min-width: 640px) {
+  .bulk-bar { bottom: var(--gap-lg); }
+  .main-view.bulk-open { padding-bottom: 96px; }
+  body.bulk-open .toast { bottom: 104px; }
+}
 
 .link-btn {
   border: none;
@@ -1046,6 +1062,27 @@
 
 .filter-toggle.open .icon-chevron { transform: rotate(180deg); }
 
+/* Hinweis auf aktive Filter (Ergebnisliste ist eingeschränkt) */
+.filter-toggle.has-filters {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+/* Kopfzeile: Filter-Schalter links, Trefferzahl rechts */
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-sm);
+}
+
+.list-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
 .list-filter-panel {
   max-height: 0;
   overflow: hidden;
@@ -1055,7 +1092,47 @@
   transition: max-height 0.25s ease;
 }
 
-.list-controls.filter-open .list-filter-panel { max-height: 440px; }
+.list-controls.filter-open .list-filter-panel { max-height: 640px; }
+
+/* Feldgruppen im Filterbereich: Bezeichnung links, Bedienelemente rechts */
+.list-filter-panel .filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.list-filter-panel .filter-label {
+  flex: 0 0 72px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+}
+
+.list-filter-panel .sort-select {
+  width: auto;
+  min-width: 150px;
+  margin-left: 0;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+/* Auswahlmodus (Sammelaktionen) – gehört zu Suche & Filter */
+.selection-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: var(--gap-sm);
+  border-top: 1px solid var(--border);
+}
+
+.selection-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
 
 /* ═══════════════════ Dokument-Vorschau ═══════════════════ */
 
