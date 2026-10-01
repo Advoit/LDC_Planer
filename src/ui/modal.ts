@@ -1,6 +1,6 @@
 /* ── Modal / Bottom-Sheet (mobil) ── */
 
-import { el } from './dom';
+import { el, icon } from './dom';
 
 export interface ModalAction {
   label: string;
@@ -31,7 +31,7 @@ export function openModal(opts: ModalOptions): ModalHandle {
       el('div', { class: 'modal-handle' }),
       el('div', { class: 'modal-header' }, [
         el('h2', { class: 'modal-title' }, [opts.title]),
-        el('button', { class: 'icon-btn modal-close', 'aria-label': 'Schließen' }, [iconX()]),
+        el('button', { class: 'icon-btn modal-close', 'aria-label': 'Schließen' }, [icon('x')]),
       ]),
       el('div', { class: 'modal-body' }, [opts.content]),
     ],
@@ -82,24 +82,6 @@ export function openModal(opts: ModalOptions): ModalHandle {
   firstInput?.focus();
 
   return { close, element: sheet };
-}
-
-function iconX(): SVGElement {
-  return svgIcon('<path d="M18 6 6 18M6 6l12 12"/>');
-}
-
-function svgIcon(inner: string): SVGElement {
-  const NS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('class', 'icon');
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
-  svg.setAttribute('stroke-linecap', 'round');
-  svg.setAttribute('stroke-linejoin', 'round');
-  svg.innerHTML = inner;
-  return svg;
 }
 
 /** Bestätigungsdialog. Löst mit true/false auf. */

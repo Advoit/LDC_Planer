@@ -214,6 +214,7 @@ select.input {
 .chip {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   padding: 4px 12px;
   border: 1.5px solid var(--border);
   border-radius: 100px;
@@ -225,6 +226,8 @@ select.input {
   cursor: pointer;
   transition: all 0.15s;
 }
+
+.chip .icon { width: 16px; height: 16px; }
 
 .chip:hover { border-color: var(--blue); color: var(--blue); }
 .chip.active {

@@ -5,6 +5,7 @@ import { STATUS_LABELS, TASK_TYPS, TASK_TYP_LABELS } from '../domain/types';
 import type { Project, Task, TaskStatus } from '../domain/types';
 import { defaultTaskFilter, filterTasks } from '../domain/task-filter';
 import type { TaskFilter, TaskSortKey } from '../domain/task-filter';
+import { getPreference, setPreference } from '../core/preferences';
 import { createBulkBar } from './task-bulk-bar';
 
 export interface TaskListOptions {
@@ -25,6 +26,8 @@ let taskListProjectId: string | null = null;
 let filter: TaskFilter = defaultTaskFilter();
 let selectionMode = false;
 let panelOpen = false;
+/* Große Vorschaubilder in der Aufgabenliste (bleibt geräteweit erhalten) */
+let largeImages = getPreference<boolean>('taskList.largeImages', false);
 const selectedIds = new Set<string>();
 
 export function renderTaskList(container: HTMLElement, opts: TaskListOptions): void {
@@ -128,6 +131,22 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
     typRow.appendChild(chip);
   }
 
+  /* Ansicht: größere Vorschaubilder in der Liste */
+  const viewRow = el('div', { class: 'filter-row' });
+  viewRow.appendChild(el('span', { class: 'filter-label' }, ['Ansicht']));
+  const largeImagesChip = el('button', { class: 'chip', type: 'button' }, [
+    icon('image'),
+    el('span', {}, ['Große Bilder']),
+  ]) as HTMLButtonElement;
+  largeImagesChip.classList.toggle('active', largeImages);
+  largeImagesChip.addEventListener('click', () => {
+    largeImages = !largeImages;
+    setPreference('taskList.largeImages', largeImages);
+    largeImagesChip.classList.toggle('active', largeImages);
+    renderList();
+  });
+  viewRow.appendChild(largeImagesChip);
+
   const searchRow = el('div', { class: 'filter-row' });
   searchRow.appendChild(el('span', { class: 'filter-label' }, ['Suche']));
   searchRow.appendChild(searchInput);
@@ -136,6 +155,7 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
   panel.appendChild(statusRow);
   panel.appendChild(typRow);
   panel.appendChild(sortRow);
+  panel.appendChild(viewRow);
 
   /* Auswahlmodus für Sammelaktionen (gehört zu Suche & Filter) */
   const selectToggle = el('button', {
@@ -198,6 +218,7 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
 
   function renderList(): void {
     clear(listEl);
+    listEl.classList.toggle('large-thumbs', largeImages);
     const tasks = filterTasks(opts.project.tasks, filter);
     const total = opts.project.tasks.length;
 
@@ -245,12 +266,12 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
       TASK_TYP_LABELS[typ],
     ]);
 
+    /* Nuggets (Typ-/Status-Badges) stehen unter dem Aufgabentext, damit die
+       Überschrift auf schmalen Bildschirmen nicht gequetscht wird. */
     const info = el('div', { class: 'task-info' }, [
-      el('div', { class: 'task-info-top' }, [
-        el('span', { class: 'task-name' }, [task.name]),
-        el('span', { class: 'task-badges' }, [typBadge, statusBadge]),
-      ]),
+      el('span', { class: 'task-name' }, [task.name]),
       el('p', { class: 'task-desc-clamp' }, [task.description]),
+      el('div', { class: 'task-badges' }, [typBadge, statusBadge]),
       el('div', { class: 'task-meta' }, [
         task.art ? el('span', {}, [`🏷 ${task.art}`]) : el('span'),
         task.position ? el('span', {}, [`📍 ${task.position}`]) : el('span'),

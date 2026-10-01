@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "icons": "node scripts/generate-icons.mjs",
+    "icons:tabler": "node scripts/fetch-tabler-icons.mjs",
     "embed:instandsetzungs": "node scripts/embed-instandsetzungs-template.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

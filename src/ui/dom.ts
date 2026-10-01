@@ -1,5 +1,7 @@
 /* ── Kleine DOM-Helfer ── */
 
+import { TABLER_ICON_PATHS } from './icons';
+
 type Attrs = Record<string, string | number | boolean | null | undefined>;
 
 export function el<K extends keyof HTMLElementTagNameMap>(
@@ -27,6 +29,7 @@ export function clear(node: HTMLElement): void {
   node.replaceChildren();
 }
 
+/** Icons stammen von Tabler Icons (https://tabler.io/icons) – siehe `icons.ts`. */
 export function icon(name: string): SVGElement {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
@@ -37,36 +40,7 @@ export function icon(name: string): SVGElement {
   svg.setAttribute('stroke-width', '2');
   svg.setAttribute('stroke-linecap', 'round');
   svg.setAttribute('stroke-linejoin', 'round');
-
-  const paths: Record<string, string> = {
-    plus: '<path d="M12 5v14M5 12h14"/>',
-    pencil: '<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
-    trash: '<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>',
-    folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
-    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
-    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
-    list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
-    x: '<path d="M18 6 6 18M6 6l12 12"/>',
-    search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
-    chevron: '<path d="m9 18 6-6-6-6"/>',
-    check: '<path d="M20 6 9 17l-5-5"/>',
-    image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
-    camera: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
-    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
-    clipboard: '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/>',
-    file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
-    paperclip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
-    'folder-plus': '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path d="M12 11v6M9 14h6"/>',
-    'file-text': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/>',
-    eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
-    presentation: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M7 21h10M12 17v4M2 9h20"/>',
-    copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
-    history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
-    'rotate-ccw': '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
-    'check-square': '<path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
-    'file-down': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 12v6"/><path d="m9 15 3 3 3-3"/>',
-  };
-  svg.innerHTML = paths[name] ?? '';
+  svg.innerHTML = TABLER_ICON_PATHS[name] ?? '';
   return svg;
 }
 
@@ -136,7 +110,47 @@ export function pickFile(accept: string): Promise<File | null> {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = accept;
-    input.onchange = () => resolve(input.files?.[0] ?? null);
+    /* iOS/Android: Das Feld muss im Dokument liegen. Ein nicht eingehängtes
+       Input öffnet den Auswahldialog auf manchen mobilen Browsern nicht. */
+    input.style.position = 'fixed';
+    input.style.left = '-9999px';
+    input.style.width = '1px';
+    input.style.height = '1px';
+    input.style.opacity = '0';
+    input.setAttribute('aria-hidden', 'true');
+
+    let settled = false;
+    const finish = (file: File | null): void => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+      resolve(file);
+    };
+
+    input.addEventListener('change', () => finish(input.files?.[0] ?? null));
+    /* Bricht die Auswahl ab, feuert kein `change`. Beim Zurückkehren in den Tab
+       räumen wir auf, damit kein toter Input zurückbleibt. */
+    window.addEventListener(
+      'focus',
+      () => setTimeout(() => finish(input.files?.[0] ?? null), 1000),
+      { once: true },
+    );
+
+    document.body.appendChild(input);
     input.click();
+  });
+}
+
+/**
+ * Liest eine Datei als ArrayBuffer – mit FileReader-Fallback für ältere
+ * iOS-/Android-Browser, denen `Blob.arrayBuffer()` fehlt.
+ */
+export async function readFileAsArrayBuffer(file: Blob): Promise<ArrayBuffer> {
+  if (typeof file.arrayBuffer === 'function') return file.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+    reader.readAsArrayBuffer(file);
   });
 }

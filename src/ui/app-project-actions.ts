@@ -1,6 +1,6 @@
 /* ── Aktionen rund um Projekte, Sicherungen, Dokumente und Exporte ── */
 
-import { downloadBlob, pickFile } from './dom';
+import { downloadBlob, pickFile, readFileAsArrayBuffer } from './dom';
 import { showToast } from './toast';
 import { openNewProjectFlow } from './project-form';
 import { showMergeOrOverwriteDialog, runMergeFlow } from './merge-flow';
@@ -94,24 +94,41 @@ export async function saveZip(): Promise<void> {
 }
 
 export async function loadZip(): Promise<void> {
-  /* .ldcproj bleibt aus Abwärtskompatibilität wählbar (identisches ZIP-Format) */
-  const file = await pickFile('.zip,.ldcproj');
+  /* Neben den Endungen auch MIME-Typen angeben: iOS (Dateien-App) und Android
+     blenden ZIP-Dateien sonst je nach Browser/Version aus. `.ldcproj` bleibt
+     aus Abwärtskompatibilität wählbar (identisches ZIP-Format). */
+  const file = await pickFile(
+    'application/zip,application/x-zip-compressed,application/octet-stream,.zip,.ldcproj',
+  );
   if (!file) return;
   await importProjectFile(file);
 }
 
 /** Importiert eine (per Auswahl oder Drag & Drop) übergebene Projekt-ZIP. */
 export async function importProjectFile(file: File): Promise<void> {
+  if (file.size === 0) {
+    showToast('Die Datei ist leer.', 'error');
+    return;
+  }
+
   let imported: Project | null = null;
+  let readFailed = false;
   try {
+    /* FileReader-Fallback für ältere iOS-/Android-Browser (kein Blob.arrayBuffer). */
+    const buffer = await readFileAsArrayBuffer(file);
     imported = await withProgress('Projekt wird geladen …', async (report) =>
-      parseProjectZip(await file.arrayBuffer(), report),
+      parseProjectZip(buffer, report),
     );
   } catch {
-    imported = null;
+    readFailed = true;
   }
   if (!imported) {
-    showToast('Die Datei ist keine gültige Projekt-ZIP-Datei.', 'error');
+    showToast(
+      readFailed
+        ? 'Die Datei konnte nicht gelesen werden. Bitte erneut auswählen.'
+        : 'Die Datei ist keine gültige Projekt-ZIP-Datei.',
+      'error',
+    );
     return;
   }
 

@@ -1,12 +1,26 @@
 /* ── Projekt-Import: Projekt-ZIP einlesen ── */
 
-import { unzipSync } from 'fflate';
+import { unzip } from 'fflate';
 import type { Project, ProjectDocument, Task, TaskImage } from '../domain/types';
 import { sha256Hex } from '../core/hash';
 import type { ExportedProject, ExportedTask, DocumentRef, ImageRef } from './export';
 import { migrateProject } from '../core/migrate';
 import { createUiYielder, reportProgress } from '../core/progress';
 import type { ProgressReporter } from '../core/progress';
+
+/**
+ * Entpackt ein ZIP asynchron. Anders als `unzipSync` gibt fflate zwischen den
+ * Einträgen den Main-Thread frei – auf iPhone/iPad und Android bleibt die
+ * Oberfläche dadurch bedienbar, ohne dass die App beim Import blockiert.
+ */
+function unzipAsync(data: Uint8Array): Promise<Record<string, Uint8Array>> {
+  return new Promise((resolve, reject) => {
+    unzip(data, (err, files) => {
+      if (err) reject(err);
+      else resolve(files);
+    });
+  });
+}
 
 function bytesToBase64(bytes: Uint8Array): string {
   const chunkSize = 0x8000;
@@ -160,7 +174,7 @@ export async function parseProjectZip(
   const data = new Uint8Array(buffer);
   let unzipped: Record<string, Uint8Array>;
   try {
-    unzipped = unzipSync(data);
+    unzipped = await unzipAsync(data);
   } catch {
     return null;
   }

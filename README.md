@@ -140,6 +140,14 @@ src/
 
 </details>
 
+## Icons
+
+Alle Symbole in der Oberfläche stammen von **[Tabler Icons](https://tabler.io/icons)** (MIT-Lizenz, Repository: [tabler/tabler-icons](https://github.com/tabler/tabler-icons)). Die verwendeten Icons sind als Inline-SVG in `src/ui/icons.ts` eingebunden und lassen sich mit einem Befehl neu von Tabler herunterladen:
+
+```bash
+npm run icons:tabler
+```
+
 ## Lizenz
 
 Privat / intern – kein Open-Source-Lizenzmodell hinterlegt.
