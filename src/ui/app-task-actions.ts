@@ -30,7 +30,8 @@ export function openTask(taskId: string): void {
     project: state.project,
     taskId,
     onChanged: (updated) => replaceTask(updated),
-    onDuplicate: (task) => void copyTask(task.id),
+    /* Duplizieren nur im Editiermodus anbieten */
+    onDuplicate: state.editMode ? (task) => void copyTask(task.id) : undefined,
   });
 }
 

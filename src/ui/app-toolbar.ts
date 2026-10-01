@@ -3,6 +3,7 @@
 import { el } from './dom';
 import { createDropdown } from './dropdown';
 import { buildMobileNav } from './mobile-nav';
+import { buildThemeToggle } from './theme-toggle';
 import type { Project } from '../domain/types';
 
 export interface ToolbarHandlers {
@@ -18,6 +19,7 @@ export interface ToolbarHandlers {
   openMaterialExport: () => void;
   newTask: () => void;
   toggleEditMode: () => void;
+  openPrivacy: () => void;
 }
 
 export interface ToolbarOptions {
@@ -39,6 +41,9 @@ interface MenuGroup {
   icon: string;
   items: MenuAction[];
 }
+
+/** Ziel für Verbesserungsvorschläge (GitHub-Issues des Projekts). */
+const FEEDBACK_URL = 'https://github.com/Advoit/LDC_Planer';
 
 /** Die Menüstruktur wird von Desktop-Toolbar und Mobile-Nav geteilt. */
 function menuGroups(opts: ToolbarOptions): MenuGroup[] {
@@ -74,6 +79,11 @@ function menuGroups(opts: ToolbarOptions): MenuGroup[] {
           icon: 'trash',
           onClick: handlers.openTrash,
           disabled: !hasProject,
+        },
+        {
+          label: 'Verbesserungsvorschläge',
+          icon: 'bulb',
+          onClick: () => window.open(FEEDBACK_URL, '_blank', 'noopener,noreferrer'),
         },
       ],
     },
@@ -117,6 +127,18 @@ function menuGroups(opts: ToolbarOptions): MenuGroup[] {
       },
     );
   }
+
+  groups.push({
+    label: 'Info',
+    icon: 'shield-check',
+    items: [
+      {
+        label: 'Datenschutz & Cookies',
+        icon: 'cookie',
+        onClick: handlers.openPrivacy,
+      },
+    ],
+  });
 
   return groups;
 }
@@ -162,6 +184,8 @@ export function buildToolbar(opts: ToolbarOptions): HTMLElement {
     );
   }
   bar.appendChild(actions);
+  /* Umschalter hell/dunkel – sitzt auch mobil oben rechts in der Kopfleiste */
+  bar.appendChild(buildThemeToggle());
   return bar;
 }
 

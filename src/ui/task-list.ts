@@ -273,10 +273,10 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
       el('p', { class: 'task-desc-clamp' }, [task.description]),
       el('div', { class: 'task-badges' }, [typBadge, statusBadge]),
       el('div', { class: 'task-meta' }, [
-        task.art ? el('span', {}, [`🏷 ${task.art}`]) : el('span'),
-        task.position ? el('span', {}, [`📍 ${task.position}`]) : el('span'),
-        task.plannedWork ? el('span', {}, [`⏱ ${task.plannedWork}`]) : el('span'),
-        el('span', {}, [`👤 ${task.personnel ?? 1} Pers.`]),
+        task.art ? metaItem('tag', task.art) : el('span'),
+        task.position ? metaItem('map-pin', task.position) : el('span'),
+        task.plannedWork ? metaItem('stopwatch', task.plannedWork) : el('span'),
+        metaItem('user', `${task.personnel ?? 1} Pers.`),
         task.material.length > 0
           ? el('span', {}, [`${task.material.length} Materialpositionen`])
           : el('span'),
@@ -317,6 +317,11 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
   }
 
   renderList();
+}
+
+/** Ein Meta-Eintrag der Aufgabenzeile: Tabler-Icon plus Text. */
+function metaItem(iconName: string, text: string): HTMLElement {
+  return el('span', { class: 'meta-item' }, [icon(iconName), text]);
 }
 
 function iconButton(iconName: string, title: string, onClick: () => void): HTMLElement {

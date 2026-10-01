@@ -7,6 +7,7 @@ import { buildMobileNavigation, buildToolbar } from './ui/app-toolbar';
 import type { ToolbarHandlers } from './ui/app-toolbar';
 import { initState, setRenderer, state, toggleEditMode } from './ui/app-state';
 import { withProgress } from './ui/progress';
+import { maybeShowConsentNotice, showConsentNotice } from './ui/consent-banner';
 import {
   importProjectFile,
   loadZip,
@@ -41,6 +42,8 @@ export async function initApp(): Promise<void> {
     await initState();
   });
   renderApp();
+  /* Cookie-/Speicher-Hinweis nur beim ersten Besuch (bzw. nach Versionswechsel) */
+  maybeShowConsentNotice();
 }
 
 /* ── Rendering ── */
@@ -68,6 +71,7 @@ function toolbarOptions(): Parameters<typeof buildToolbar>[0] {
     openMaterialExport: () => void showMaterialExport(),
     newTask: () => void newTask(),
     toggleEditMode: () => toggleEditMode(),
+    openPrivacy: () => showConsentNotice(),
   };
   return { project: state.project, editMode: state.editMode, handlers };
 }

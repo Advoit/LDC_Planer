@@ -31,7 +31,7 @@ Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben e
 **📝 Aufgaben**
 - Name und Beschreibung, Typ **Mängel** oder **Umbau/Neuinstallation**, Art **A1–C3**
 - Bei Mängeln zusätzlich: Prüfung, Fehlerbeschreibung, Position
-- Vorher- und Nachher-Bilder (antippen zum Vergrößern), Vorschaubild wählbar, auf dem Handy **direkt fotografieren**
+- Vorher- und Nachher-Bilder – antippen zum Vergrößern, in der Großansicht **zoomen** (Mausrad, Doppelklick, +/−, Tastatur) und bei Zoom **verschieben**; Vorschaubild wählbar, auf dem Handy **direkt fotografieren**
 - Große Fotos werden beim Hochladen automatisch verkleinert (längste Kante 1600 px)
 - Dokumente und Pläne je Aufgabe oder je Projekt, mit Vorschau im Browser
 - Material mit Vorschlägen aus früheren Aufgaben (Artikel **und** zuletzt verwendete Einheit)
@@ -52,6 +52,9 @@ Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben e
 **⏳ Ladeanzeige**
 - **Fortschrittsbalken** bei allen langen Vorgängen: Projekt laden oder importieren, Projektbericht, Materialliste, Aufgaben-PDF, Instandsetzungsreport und ZIP-Sicherung – mit Prozentangabe und Zähler („Aufgabe 12 von 40“)
 - **Kein Aufblitzen**: kurze Vorgänge (unter ~0,2 s) laufen ohne Anzeige durch
+
+**🎨 Darstellung**
+- **Tag-/Nachtmodus** über den Schalter oben rechts – die Wahl bleibt im Browser gespeichert; ohne eigene Wahl folgt die App der Geräteeinstellung
 
 ## Exporte
 
@@ -103,6 +106,22 @@ LDC-Projekt-<PROJEKT-ID>/
 Bilder und Dokumente werden per **SHA-256-Hash** dedupliziert – beim Zusammenführen werden identische Dateien übersprungen, unterschiedliche angehängt. Ältere Sicherungen (`.ldcproj`) bleiben ladbar.
 
 </details>
+
+## Datenschutz & Cookies
+
+Der Planer arbeitet vollständig offline und ohne Backend. Deshalb ist auch kein klassischer Consent-Dialog nötig – es gibt **keine Cookies von Drittanbietern, kein Tracking und keine Datenübertragung**. Gespeichert wird ausschließlich, was für die Funktion erforderlich ist, und zwar lokal auf dem Gerät:
+
+| Kategorie | Zweck | Ort |
+| --- | --- | --- |
+| **Unbedingt erforderlich** (nicht abwählbar) | Projekte, Bilder und Dokumente | IndexedDB |
+| **Unbedingt erforderlich** | Einstellungen (Tag-/Nachtmodus, Ansicht/Filter, letzte Person) | localStorage |
+| **Unbedingt erforderlich** | App-Shell für die Offline-Nutzung | Service-Worker-Cache |
+
+Rechtsgrundlage ist § 25 Abs. 2 TDDDG (unbedingt erforderliche Speicherung). Beim ersten Start erscheint ein **einmaliger Hinweis**, der darüber informiert und die Entscheidung samt Zeitstempel festhält. Er lässt sich jederzeit über **Info → Datenschutz & Cookies** erneut öffnen. Kommen später optionale Kategorien (z. B. Statistik) hinzu, erscheinen automatisch Zustimmungsschalter sowie „Alle akzeptieren“ und „Nur notwendige“ mit gleicher Gewichtung.
+
+## Feedback
+
+Verbesserungsvorschläge und Fehlerberichte sind willkommen: **[github.com/Advoit/LDC_Planer](https://github.com/Advoit/LDC_Planer)** – in der App über **Projekt → Verbesserungsvorschläge** erreichbar.
 
 ## Entwicklung
 

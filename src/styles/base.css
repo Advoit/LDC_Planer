@@ -43,20 +43,25 @@
   --container-w: 780px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1C1C1E;
-    --card-bg: #2C2C2E;
-    --text: #F5F5F7;
-    --text-secondary: #AEAEB2;
-    --text-tertiary: #636366;
-    --border: #38383A;
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
-    --status-offen: #0A84FF;
-    --status-hinweis: #FF9F0A;
-  }
+/* Nachtmodus: wird per data-theme am <html>-Element gesetzt (Umschalter oben rechts). */
+:root[data-theme='dark'] {
+  --bg: #1C1C1E;
+  --card-bg: #2C2C2E;
+  --text: #F5F5F7;
+  --text-secondary: #AEAEB2;
+  --text-tertiary: #636366;
+  --border: #38383A;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --status-offen: #0A84FF;
+  --status-hinweis: #FF9F0A;
+}
+
+/* Eingabehilfe: Systemwechsel ohne JavaScript weiterhin berücksichtigen,
+   solange noch keine Wahl getroffen wurde. */
+:root:not([data-theme]) {
+  color-scheme: light dark;
 }
 
 /* ── Reset ── */
@@ -255,10 +260,8 @@ select.input {
 .badge-typ-maengel { background: rgba(94, 92, 230, 0.12); color: #5E5CE6; }
 .badge-typ-umbau { background: rgba(48, 176, 199, 0.14); color: #1E9BB0; }
 
-@media (prefers-color-scheme: dark) {
-  .badge-offen { background: rgba(10, 132, 255, 0.18); }
-  .badge-hinweis { background: rgba(255, 159, 10, 0.18); }
-  .badge-behoben { background: rgba(52, 199, 89, 0.18); }
-  .badge-typ-maengel { background: rgba(94, 92, 230, 0.22); color: #A6A4FF; }
-  .badge-typ-umbau { background: rgba(48, 176, 199, 0.22); color: #7BD3E8; }
-}
+:root[data-theme='dark'] .badge-offen { background: rgba(10, 132, 255, 0.18); }
+:root[data-theme='dark'] .badge-hinweis { background: rgba(255, 159, 10, 0.18); }
+:root[data-theme='dark'] .badge-behoben { background: rgba(52, 199, 89, 0.18); }
+:root[data-theme='dark'] .badge-typ-maengel { background: rgba(94, 92, 230, 0.22); color: #A6A4FF; }
+:root[data-theme='dark'] .badge-typ-umbau { background: rgba(48, 176, 199, 0.22); color: #7BD3E8; }

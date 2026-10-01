@@ -41,6 +41,18 @@ const ICONS = {
   'rotate-ccw': 'restore',
   'check-square': 'checkbox',
   'file-down': 'file-download',
+  tag: 'tag',
+  'map-pin': 'map-pin',
+  stopwatch: 'stopwatch',
+  user: 'user',
+  sun: 'sun',
+  moon: 'moon',
+  cookie: 'cookie',
+  'shield-check': 'shield-check',
+  bulb: 'bulb',
+  'zoom-in': 'zoom-in',
+  'zoom-out': 'zoom-out',
+  'zoom-reset': 'zoom-reset',
 };
 
 /** Holt ein Icon-SVG und reduziert es auf den Inhalt zwischen <svg> und </svg>. */

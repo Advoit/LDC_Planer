@@ -488,6 +488,14 @@ body.bulk-open .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
   margin-top: 6px;
 }
 
+.task-meta .meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.task-meta .meta-item .icon { width: 14px; height: 14px; }
+
 .task-edit-btn { flex-shrink: 0; }
 
 /* Ansicht „Große Bilder“: deutlich größere Vorschau in der Aufgabenliste */
@@ -761,32 +769,75 @@ body.bulk-open .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
   overflow-y: auto;
 }
 
-/* ═══════════════════ Lightbox ═══════════════════ */
+/* ═══════════════════ Lightbox (Zoom & Verschieben) ═══════════════════ */
 
 .lightbox-overlay {
   position: fixed;
   inset: 0;
   z-index: 1100;
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.2s;
+}
+
+.lightbox-overlay.open { background: rgba(0, 0, 0, 0.9); }
+
+.lightbox-stage {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0);
-  transition: background 0.2s;
-  cursor: zoom-out;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 
-.lightbox-overlay.open { background: rgba(0,0,0,0.85); }
+.lightbox-overlay.open .lightbox-stage { opacity: 1; }
 
-.lightbox-overlay img {
+.lightbox-img {
   max-width: 90vw;
   max-height: 90vh;
   border-radius: var(--radius);
-  opacity: 0;
-  transform: scale(0.9);
-  transition: opacity 0.2s, transform 0.2s;
+  user-select: none;
+  -webkit-user-drag: none;
+  touch-action: none;
+  transform-origin: center center;
+  will-change: transform;
+  cursor: zoom-in;
 }
 
-.lightbox-overlay.open img { opacity: 1; transform: scale(1); }
+/* Bedienleiste: Verkleinern, Prozentanzeige, Vergrößern, Zurücksetzen, Schließen */
+.lightbox-toolbar {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 100px;
+  background: rgba(28, 28, 30, 0.72);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.lightbox-overlay.open .lightbox-toolbar { opacity: 1; }
+
+.lightbox-btn { color: #fff; }
+.lightbox-btn:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+
+.lightbox-zoom-value {
+  min-width: 46px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ═══════════════════ Projektliste (Startseite & „Meine Projekte“) ═══════════════════ */
 
@@ -1396,4 +1447,130 @@ body.bulk-open .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
 @media (prefers-reduced-motion: reduce) {
   .progress-track.indeterminate .progress-fill { animation-duration: 2.4s; }
   .progress-card { transition: none; transform: none; }
+}
+
+/* ═══════════════════ Tag-/Nachtmodus ═══════════════════ */
+
+.theme-toggle {
+  flex-shrink: 0;
+}
+
+/* ═══════════════════ Cookie-/Speicher-Hinweis ═══════════════════
+   Nicht blockierender Hinweis am unteren Rand – die App bleibt voll nutzbar. */
+
+.consent-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(16px);
+  z-index: 1800;
+  width: min(560px, calc(100% - 2 * var(--gap)));
+  max-height: min(82dvh, 640px);
+  overflow-y: auto;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  transition: opacity 0.22s, transform 0.22s;
+}
+
+.consent-banner.open { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.consent-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.consent-icon { display: inline-flex; color: var(--blue); }
+.consent-icon .icon { width: 22px; height: 22px; }
+
+.consent-title { font-size: 17px; }
+
+.consent-intro {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.consent-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.consent-cat {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.consent-cat input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--blue);
+}
+
+.consent-cat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.consent-cat-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.consent-cat-req {
+  padding: 1px 8px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--success);
+  background: rgba(52, 199, 89, 0.14);
+}
+
+.consent-cat-desc {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+
+.consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.consent-foot {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+/* Mobil oberhalb der Bottom-Navbar, mit gleichgewichteten Aktionsbuttons */
+@media (max-width: 639px) {
+  .consent-banner { bottom: calc(88px + env(safe-area-inset-bottom)); }
+  .consent-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
 }
