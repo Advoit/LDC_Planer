@@ -53,6 +53,7 @@ const ICONS = {
   'zoom-in': 'zoom-in',
   'zoom-out': 'zoom-out',
   'zoom-reset': 'zoom-reset',
+  settings: 'settings',
 };
 
 /** Holt ein Icon-SVG und reduziert es auf den Inhalt zwischen <svg> und </svg>. */

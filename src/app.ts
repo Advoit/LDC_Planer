@@ -5,8 +5,9 @@ import { renderTaskList } from './ui/task-list';
 import { buildStartScreen } from './ui/start-screen';
 import { buildMobileNavigation, buildToolbar } from './ui/app-toolbar';
 import type { ToolbarHandlers } from './ui/app-toolbar';
-import { initState, setRenderer, state, toggleEditMode } from './ui/app-state';
+import { initState, render, setRenderer, state, toggleEditMode } from './ui/app-state';
 import { withProgress } from './ui/progress';
+import { toggleTheme } from './core/theme';
 import { maybeShowConsentNotice, showConsentNotice } from './ui/consent-banner';
 import {
   importProjectFile,
@@ -72,6 +73,11 @@ function toolbarOptions(): Parameters<typeof buildToolbar>[0] {
     newTask: () => void newTask(),
     toggleEditMode: () => toggleEditMode(),
     openPrivacy: () => showConsentNotice(),
+    /* Menü neu zeichnen, damit „Tagmodus/Nachtmodus“ den neuen Zustand zeigt */
+    toggleTheme: () => {
+      toggleTheme();
+      render();
+    },
   };
   return { project: state.project, editMode: state.editMode, handlers };
 }

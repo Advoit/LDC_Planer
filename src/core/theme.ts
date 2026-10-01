@@ -13,18 +13,6 @@ const THEME_COLOR: Record<ResolvedTheme, string> = {
   dark: '#2C2C2E',
 };
 
-const listeners = new Set<() => void>();
-
-function notify(): void {
-  for (const listener of listeners) listener();
-}
-
-/** Registriert einen Beobachter; gibt eine Abmelde-Funktion zurück. */
-export function onThemeChange(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
 /** Gespeicherte Wahl – „system“ ist der Standard (folgt der Geräteeinstellung). */
 export function getThemeChoice(): ThemeChoice {
   const value = getPreference<ThemeChoice>(KEY, 'system');
@@ -55,7 +43,6 @@ export function applyTheme(): void {
 export function setThemeChoice(choice: ThemeChoice): void {
   setPreference(KEY, choice);
   applyTheme();
-  notify();
 }
 
 /** Wechselt zwischen Tag und Nacht (verlässt dabei den System-Modus). */
@@ -71,9 +58,6 @@ export function initTheme(): void {
   }
   const media = window.matchMedia('(prefers-color-scheme: dark)');
   media.addEventListener?.('change', () => {
-    if (getThemeChoice() === 'system') {
-      applyTheme();
-      notify();
-    }
+    if (getThemeChoice() === 'system') applyTheme();
   });
 }

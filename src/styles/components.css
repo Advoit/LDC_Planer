@@ -102,8 +102,11 @@
 .dropdown-menu {
   position: absolute;
   top: calc(100% + 8px);
-  left: 0;
+  /* Rechtsbündig am Auslöser – die Aktionen stehen rechts, sonst ragt das
+     Menü über den rechten Rand hinaus (leerer Bereich / seitliches Scrollen). */
+  right: 0;
   min-width: 224px;
+  max-width: calc(100vw - 2 * var(--gap));
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1447,12 +1450,6 @@ body.bulk-open .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
 @media (prefers-reduced-motion: reduce) {
   .progress-track.indeterminate .progress-fill { animation-duration: 2.4s; }
   .progress-card { transition: none; transform: none; }
-}
-
-/* ═══════════════════ Tag-/Nachtmodus ═══════════════════ */
-
-.theme-toggle {
-  flex-shrink: 0;
 }
 
 /* ═══════════════════ Cookie-/Speicher-Hinweis ═══════════════════

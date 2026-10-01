@@ -73,6 +73,10 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   scroll-behavior: smooth;
+  /* Kein seitliches Scrollen: verhindert den leeren Bereich rechts, wenn ein
+     Element (z. B. ein Menü) breiter als der Bildschirm ist. Das Sticky der
+     Kopfleiste bleibt erhalten, da der Wert an den Viewport vererbt wird. */
+  overflow-x: hidden;
 }
 
 body {

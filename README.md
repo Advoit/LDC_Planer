@@ -54,7 +54,7 @@ Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben e
 - **Kein Aufblitzen**: kurze Vorgänge (unter ~0,2 s) laufen ohne Anzeige durch
 
 **🎨 Darstellung**
-- **Tag-/Nachtmodus** über den Schalter oben rechts – die Wahl bleibt im Browser gespeichert; ohne eigene Wahl folgt die App der Geräteeinstellung
+- **Tag-/Nachtmodus** unter **Einstellungen** – die Wahl bleibt im Browser gespeichert; ohne eigene Wahl folgt die App der Geräteeinstellung
 
 ## Exporte
 
@@ -117,11 +117,11 @@ Der Planer arbeitet vollständig offline und ohne Backend. Deshalb ist auch kein
 | **Unbedingt erforderlich** | Einstellungen (Tag-/Nachtmodus, Ansicht/Filter, letzte Person) | localStorage |
 | **Unbedingt erforderlich** | App-Shell für die Offline-Nutzung | Service-Worker-Cache |
 
-Rechtsgrundlage ist § 25 Abs. 2 TDDDG (unbedingt erforderliche Speicherung). Beim ersten Start erscheint ein **einmaliger Hinweis**, der darüber informiert und die Entscheidung samt Zeitstempel festhält. Er lässt sich jederzeit über **Info → Datenschutz & Cookies** erneut öffnen. Kommen später optionale Kategorien (z. B. Statistik) hinzu, erscheinen automatisch Zustimmungsschalter sowie „Alle akzeptieren“ und „Nur notwendige“ mit gleicher Gewichtung.
+Rechtsgrundlage ist § 25 Abs. 2 TDDDG (unbedingt erforderliche Speicherung). Beim ersten Start erscheint ein **einmaliger Hinweis**, der darüber informiert und die Entscheidung samt Zeitstempel festhält. Er lässt sich jederzeit über **Einstellungen → Info** erneut öffnen. Kommen später optionale Kategorien (z. B. Statistik) hinzu, erscheinen automatisch Zustimmungsschalter sowie „Alle akzeptieren“ und „Nur notwendige“ mit gleicher Gewichtung.
 
 ## Feedback
 
-Verbesserungsvorschläge und Fehlerberichte sind willkommen: **[github.com/Advoit/LDC_Planer](https://github.com/Advoit/LDC_Planer)** – in der App über **Projekt → Verbesserungsvorschläge** erreichbar.
+Verbesserungsvorschläge und Fehlerberichte sind willkommen: **[github.com/Advoit/LDC_Planer](https://github.com/Advoit/LDC_Planer)** – in der App über **Einstellungen → Verbesserungsvorschläge** erreichbar.
 
 ## Entwicklung
 

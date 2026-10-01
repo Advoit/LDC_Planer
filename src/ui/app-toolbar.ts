@@ -3,7 +3,7 @@
 import { el } from './dom';
 import { createDropdown } from './dropdown';
 import { buildMobileNav } from './mobile-nav';
-import { buildThemeToggle } from './theme-toggle';
+import { resolvedTheme } from '../core/theme';
 import type { Project } from '../domain/types';
 
 export interface ToolbarHandlers {
@@ -20,6 +20,7 @@ export interface ToolbarHandlers {
   newTask: () => void;
   toggleEditMode: () => void;
   openPrivacy: () => void;
+  toggleTheme: () => void;
 }
 
 export interface ToolbarOptions {
@@ -49,6 +50,7 @@ const FEEDBACK_URL = 'https://github.com/Advoit/LDC_Planer';
 function menuGroups(opts: ToolbarOptions): MenuGroup[] {
   const { project, editMode, handlers } = opts;
   const hasProject = project !== null;
+  const dark = resolvedTheme() === 'dark';
 
   const groups: MenuGroup[] = [
     {
@@ -73,17 +75,6 @@ function menuGroups(opts: ToolbarOptions): MenuGroup[] {
           icon: 'history',
           onClick: handlers.openSnapshots,
           disabled: !hasProject,
-        },
-        {
-          label: 'Gelöschte Aufgaben',
-          icon: 'trash',
-          onClick: handlers.openTrash,
-          disabled: !hasProject,
-        },
-        {
-          label: 'Verbesserungsvorschläge',
-          icon: 'bulb',
-          onClick: () => window.open(FEEDBACK_URL, '_blank', 'noopener,noreferrer'),
         },
       ],
     },
@@ -123,19 +114,31 @@ function menuGroups(opts: ToolbarOptions): MenuGroup[] {
             icon: editMode ? 'check' : 'pencil',
             onClick: handlers.toggleEditMode,
           },
+          {
+            label: 'Gelöschte Aufgaben',
+            icon: 'trash',
+            onClick: handlers.openTrash,
+          },
         ],
       },
     );
   }
 
+  /* Ganz rechts in der unteren Leiste */
   groups.push({
-    label: 'Info',
-    icon: 'shield-check',
+    label: 'Einstellungen',
+    icon: 'settings',
     items: [
+      { label: 'Info', icon: 'info', onClick: handlers.openPrivacy },
       {
-        label: 'Datenschutz & Cookies',
-        icon: 'cookie',
-        onClick: handlers.openPrivacy,
+        label: dark ? 'Tagmodus' : 'Nachtmodus',
+        icon: dark ? 'sun' : 'moon',
+        onClick: handlers.toggleTheme,
+      },
+      {
+        label: 'Verbesserungsvorschläge',
+        icon: 'bulb',
+        onClick: () => window.open(FEEDBACK_URL, '_blank', 'noopener,noreferrer'),
       },
     ],
   });
@@ -184,8 +187,6 @@ export function buildToolbar(opts: ToolbarOptions): HTMLElement {
     );
   }
   bar.appendChild(actions);
-  /* Umschalter hell/dunkel – sitzt auch mobil oben rechts in der Kopfleiste */
-  bar.appendChild(buildThemeToggle());
   return bar;
 }
 
