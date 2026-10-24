@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadSharedProject, syncNow } from './server-sync';
+import { loadSharedProject, pollOnce, syncNow } from './server-sync';
 import { state } from './app-state';
 import { readServerToken, saveServerToken } from '../core/seafile';
 import { sha256Hex } from '../core/hash';
 import { buildProjectFiles } from '../io/export';
 import type { ServerAccess } from '../io/share';
-import type { Project, ProjectDocument } from '../domain/types';
+import type { Project, ProjectDocument, Task } from '../domain/types';
 
 vi.mock('./toast', () => ({ showToast: () => undefined }));
 
@@ -80,6 +80,35 @@ function makeProject(): Project {
       ...CONN,
       linkedAt: '2026-02-01T10:00:00.000Z',
     },
+  };
+}
+
+function makeTask(): Task {
+  return {
+    id: 'T1',
+    projectId: 'ABCD1234',
+    createdAt: '2026-02-02T10:00:00.000Z',
+    updatedAt: '2026-02-02T10:00:00.000Z',
+    name: 'Vom anderen Gerät',
+    description: '',
+    images: [],
+    thumbnail: null,
+    thumbnailSourceId: null,
+    material: [],
+    plannedWork: '',
+    personnel: 1,
+    typ: 'maengel',
+    art: '',
+    pruefung: '',
+    fehlerbeschreibung: '',
+    position: '',
+    documents: [],
+    status: 'offen',
+    editedBy: '',
+    editedAt: '',
+    hintText: '',
+    afterImages: [],
+    afterDocuments: [],
   };
 }
 
@@ -344,6 +373,129 @@ describe('Abgleich mit geänderter project.json', () => {
     /* Nur die JSON-Datei wird geladen; das unveränderte PDF bleibt lokal. */
     expect(downloaded).toEqual([projectPath]);
     expect(downloaded).not.toContain(documentPath);
+  });
+});
+
+describe('Automatischer Abgleich beim Polling', () => {
+  it('übernimmt neue und gelöschte Aufgaben anderer Geräte ohne Neuladen', async () => {
+    const store = stubLocalStorage();
+    const local = makeProject();
+    saveServerToken(local.server!, 'secret');
+    state.project = local;
+
+    const remote: Project = {
+      ...local,
+      updatedAt: '2026-02-02T10:00:00.000Z',
+      tasks: [makeTask()],
+    };
+    const rootName = 'LDC-Projekt-ABCD1234';
+    const rootPath = `${CONN.path}/${rootName}`;
+    const projectPath = `${rootPath}/project.json`;
+    let remoteFiles = buildProjectFiles(remote, { includeServer: false });
+    const oldFiles = buildProjectFiles(local, { includeServer: false });
+    const oldProjectBytes = oldFiles[`${rootName}/project.json`];
+    const oldHash = await sha256Hex(
+      oldProjectBytes.buffer.slice(
+        oldProjectBytes.byteOffset,
+        oldProjectBytes.byteOffset + oldProjectBytes.byteLength,
+      ) as ArrayBuffer,
+    );
+    const key = 'https://host.tld|repo-1|/Baustelle|ABCD1234';
+    store.set(
+      'ldc.seafile.fileHashes',
+      JSON.stringify({ [key]: { [projectPath]: oldHash } }),
+    );
+    store.set(
+      'ldc.seafile.fileSignatures',
+      JSON.stringify({ [key]: { [projectPath]: '1700000000:100' } }),
+    );
+    store.set(
+      'ldc.seafile.lastSync',
+      JSON.stringify({ ABCD1234: '2026-02-01T10:00:00.000Z' }),
+    );
+
+    const dirs: Record<string, unknown[]> = {
+      [rootPath]: [
+        { type: 'file', name: 'project.json', size: 456, mtime: 1800000000 },
+        { type: 'dir', name: 'tasks' },
+      ],
+      [`${rootPath}/tasks`]: [{ type: 'dir', name: 'T1' }],
+      [`${rootPath}/tasks/T1`]: [
+        { type: 'file', name: 'task.json', size: 789, mtime: 1800000000 },
+      ],
+    };
+    let uploads = 0;
+    vi.stubGlobal('document', { hidden: false });
+
+    mockFetch((url) => {
+      if (url === `${BASE}/`) return json({ name: 'Bibliothek' });
+      if (url.startsWith(`${BASE}/dir/?p=`)) {
+        const path = repoPathFromUrl(url);
+        if (path === CONN.path) return json([]);
+        return json(dirs[path] ?? []);
+      }
+      if (url.startsWith(`${BASE}/file/?p=`)) {
+        const path = repoPathFromUrl(url);
+        return json(
+          `https://files.tld/seafhttp/files/${encodeURIComponent(path)}`,
+        );
+      }
+      if (url.startsWith('https://files.tld/seafhttp/files/')) {
+        const path = decodeURIComponent(
+          url.slice('https://files.tld/seafhttp/files/'.length),
+        );
+        const relative = path.slice(`${CONN.path}/`.length);
+        const bytes = remoteFiles[relative];
+        if (!bytes) return new Response('not found', { status: 404 });
+        return new Response(
+          bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength,
+          ) as ArrayBuffer,
+        );
+      }
+      if (url.startsWith(`${BASE}/upload-link/`)) {
+        return json('https://host.tld:8082/upload-api/token');
+      }
+      if (url.includes('/upload-api')) {
+        uploads++;
+        return new Response('ok');
+      }
+      throw new Error(`Unerwartete Anfrage: ${url}`);
+    });
+
+    await pollOnce();
+
+    expect(state.project?.tasks.map((task) => task.id)).toEqual(['T1']);
+    expect(state.project?.tasks[0]?.name).toBe('Vom anderen Gerät');
+    /* Reiner Serverstand: lokal wurde nichts geändert, also nicht zurückschreiben. */
+    expect(uploads).toBe(0);
+
+    /* Ein weiterer Poll ohne Serveränderung darf ebenfalls nichts hochladen. */
+    await pollOnce();
+    expect(uploads).toBe(0);
+
+    /* Löschung auf dem anderen Gerät: Tombstone kommt über project.json. */
+    const deletion: Project = {
+      ...remote,
+      updatedAt: '2099-01-01T00:00:00.000Z',
+      tasks: [],
+      deletedTasks: [
+        { id: 'T1', deletedAt: '2099-01-01T00:00:00.000Z' },
+      ],
+    };
+    remoteFiles = buildProjectFiles(deletion, { includeServer: false });
+    dirs[rootPath] = [
+      { type: 'file', name: 'project.json', size: 456, mtime: 1800000200 },
+    ];
+    delete dirs[`${rootPath}/tasks`];
+    delete dirs[`${rootPath}/tasks/T1`];
+
+    await pollOnce();
+
+    expect(state.project?.tasks).toEqual([]);
+    expect(state.project?.deletedTasks?.map((ref) => ref.id)).toEqual(['T1']);
+    expect(uploads).toBe(0);
   });
 });
 

@@ -393,7 +393,8 @@
   gap: 8px;
   position: fixed;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateZ(0);
+  will-change: transform;
   width: min(720px, calc(100% - 2 * var(--gap)));
   bottom: calc(76px + env(safe-area-inset-bottom));
   z-index: 400;
@@ -1303,6 +1304,10 @@ body.bulk-open .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
   right: 0;
   bottom: 0;
   z-index: 500;
+  /* Eigene Compositing-Ebene: verhindert das Nachrutschen beim Scrollen
+     auf mobilen Browsern (v. a. iOS Safari). */
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
   display: flex;
   justify-content: space-around;
   align-items: stretch;
@@ -1377,6 +1382,15 @@ body.bulk-open .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
 /* Mobil: Inhalt nicht von der Bottom-Navbar überdecken lassen */
 @media (max-width: 639px) {
   #app { padding-bottom: 76px; }
+
+  /* Ohne Blur bleibt die fixierte Leiste beim Scrollen stabil und spart
+     auf schwächeren Geräten Rechenzeit. */
+  .mobile-nav,
+  .bulk-bar {
+    background: var(--card-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 
   .toast {
     bottom: calc(88px + env(safe-area-inset-bottom));

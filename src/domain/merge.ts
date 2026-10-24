@@ -140,6 +140,65 @@ function applyDeletions(
   };
 }
 
+/**
+ * Inhaltlicher Vergleich zweier Projektstände – ohne Zeitstempel und ohne
+ * gerätespezifische Server-Verknüpfung. Wird nach dem Einmischen eines
+ * Serverstands genutzt, um unnötige Rückschreibungen zu vermeiden.
+ */
+export function projectsHaveSameContent(a: Project, b: Project): boolean {
+  if (
+    a.schemaVersion !== b.schemaVersion ||
+    a.id !== b.id ||
+    a.name !== b.name ||
+    a.location !== b.location ||
+    a.description !== b.description ||
+    a.createdAt !== b.createdAt ||
+    JSON.stringify(a.reportCover ?? null) !== JSON.stringify(b.reportCover ?? null)
+  ) {
+    return false;
+  }
+
+  if (!sameHashes(a.documents, b.documents)) return false;
+  if (!sameDeletions(a.deletedTasks, b.deletedTasks)) return false;
+  if (a.tasks.length !== b.tasks.length) return false;
+
+  for (const task of a.tasks) {
+    const other = b.tasks.find((candidate) => candidate.id === task.id);
+    if (!other || !tasksEqual(task, other)) return false;
+  }
+  return true;
+}
+
+function tasksEqual(a: Task, b: Task): boolean {
+  return (
+    tasksContentEqual(a, b) &&
+    a.thumbnail === b.thumbnail &&
+    a.thumbnailSourceId === b.thumbnailSourceId &&
+    sameHashes(a.images, b.images) &&
+    sameHashes(a.afterImages, b.afterImages) &&
+    sameHashes(a.documents, b.documents) &&
+    sameHashes(a.afterDocuments, b.afterDocuments)
+  );
+}
+
+function sameHashes(
+  a: { hash: string }[] | undefined,
+  b: { hash: string }[] | undefined,
+): boolean {
+  const sa = (a ?? []).map((item) => item.hash).sort();
+  const sb = (b ?? []).map((item) => item.hash).sort();
+  return sa.length === sb.length && sa.every((hash, index) => hash === sb[index]);
+}
+
+function sameDeletions(
+  a: DeletedTaskRef[] | undefined,
+  b: DeletedTaskRef[] | undefined,
+): boolean {
+  const sa = (a ?? []).map((ref) => `${ref.id}:${ref.deletedAt}`).sort();
+  const sb = (b ?? []).map((ref) => `${ref.id}:${ref.deletedAt}`).sort();
+  return sa.length === sb.length && sa.every((entry, index) => entry === sb[index]);
+}
+
 /* ── Aufgaben-Inhalte vergleichen (ohne Bilder) ── */
 
 function tasksContentEqual(a: Task, b: Task): boolean {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeProjects } from './merge';
+import { mergeProjects, projectsHaveSameContent } from './merge';
 import type { Project, Task, TaskImage } from './types';
 
 function makeProject(id = 'ABCD1234'): Project {
@@ -214,5 +214,45 @@ describe('mergeProjects', () => {
 
     const result = await mergeProjects(local, imported, () => 'local');
     expect(result.merged.tasks[0].afterDocuments.map((d) => d.hash)).toEqual(['hash-1', 'hash-2']);
+  });
+});
+
+describe('projectsHaveSameContent', () => {
+  it('ignoriert Zeitstempel und die gerätespezifische Server-Verknüpfung', () => {
+    const local = makeProject();
+    const remote: Project = {
+      ...local,
+      updatedAt: '2026-02-01T00:00:00.000Z',
+      server: {
+        url: 'https://host.tld',
+        repoId: 'repo-1',
+        path: '/Baustelle',
+        linkedAt: '2026-02-01T00:00:00.000Z',
+      },
+    };
+
+    expect(projectsHaveSameContent(local, remote)).toBe(true);
+  });
+
+  it('erkennt neue oder inhaltlich geänderte Aufgaben', () => {
+    const local = makeProject();
+    const added: Project = { ...local, tasks: [makeTask('T1', 'Neu')] };
+    const changed: Project = {
+      ...local,
+      tasks: [
+        makeTask('T1', 'Alt'),
+        makeTask('T2', 'Alt', { description: 'geändert' }),
+      ],
+    };
+    const other: Project = {
+      ...local,
+      tasks: [
+        makeTask('T1', 'Alt'),
+        makeTask('T2', 'Alt', { description: 'anders' }),
+      ],
+    };
+
+    expect(projectsHaveSameContent(local, added)).toBe(false);
+    expect(projectsHaveSameContent(changed, other)).toBe(false);
   });
 });

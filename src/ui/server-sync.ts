@@ -5,6 +5,7 @@ import { openModal } from './modal';
 import { showToast } from './toast';
 import { persist, render, state } from './app-state';
 import { runMergeFlow } from './merge-flow';
+import { projectsHaveSameContent } from '../domain/merge';
 import { lastEditedBy, rememberEditedBy } from './status-prompt';
 import { touchProject } from '../domain/project';
 import {
@@ -87,6 +88,7 @@ const FILE_LIST_KEY = 'seafile.files';
 const FILE_HASHES_KEY = 'seafile.fileHashes';
 const FILE_SIGNATURES_KEY = 'seafile.fileSignatures';
 const AUTO_SYNC_DELAY = 3000;
+/* Sperren und Serverstand alle 20 Sekunden prüfen. */
 const POLL_INTERVAL = 20_000;
 const HEARTBEAT_INTERVAL = 60_000;
 
@@ -101,6 +103,9 @@ let currentLocks: Record<string, TaskLockEntry> = {};
 let busy = false;
 let pendingSync = false;
 let pendingPull = false;
+/* Lokale Änderungen oder ein eingemischter Serverstand warten noch auf den
+   Upload. Verhindert, dass die 20-Sekunden-Prüfung sie überspringt. */
+let uploadPending = false;
 let autoTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let pollInFlight = false;
@@ -578,8 +583,8 @@ async function sendHeartbeat(taskId: string): Promise<void> {
 
 function startPolling(): void {
   stopPolling();
-  /* Sofort einmal Sperren holen, damit die Liste nicht bis zum ersten
-     Intervall ohne Schlösser dasteht. */
+  /* Sofort einmal prüfen, damit Sperren und Serverstand nicht bis zum ersten
+     Intervall veralten. */
   void pollOnce();
   pollTimer = setInterval(() => {
     void pollOnce();
@@ -591,7 +596,20 @@ function stopPolling(): void {
   pollTimer = null;
 }
 
-/** Prüft Erreichbarkeit und holt die aktuellen Sperren. */
+/** Kein Hintergrund-Abgleich, solange ein Dialog offen ist – sonst könnten
+ *  Formulareingaben durch ein Neuzeichnen verloren gehen. */
+function modalOpen(): boolean {
+  return (
+    typeof document !== 'undefined' &&
+    typeof document.querySelector === 'function' &&
+    document.querySelector('.modal-overlay') !== null
+  );
+}
+
+/**
+ * Prüft Erreichbarkeit, holt die aktuellen Sperren und übernimmt Änderungen
+ * anderer Geräte. Läuft alle 20 Sekunden und bei Rückkehr in den Tab.
+ */
 export async function pollOnce(): Promise<void> {
   if (document.hidden || pollInFlight || busy) return;
   const ctx = context();
@@ -599,15 +617,26 @@ export async function pollOnce(): Promise<void> {
 
   pollInFlight = true;
   try {
-    await checkServer(ctx.conn, ctx.token);
+    /* Ohne bekannten Ausgangsstand (z. B. direkt nach dem Verknüpfen) würde
+       der Abgleich alle Dateien laden. Der reguläre Sync holt das nach. */
+    const folder = joinServerPath(ctx.conn.path, projectFolderName(ctx.project.id));
+    const projectJson = joinServerPath(folder, 'project.json');
+    const hasBaseline =
+      !modalOpen() &&
+      Boolean(
+        readFileSignatures(ctx)[projectJson] || readFileHashes(ctx)[projectJson],
+      );
+
+    const result = await runSync({
+      pull: hasBaseline,
+      manual: false,
+      background: true,
+      /* Alle 20 s nur prüfen; hochladen erst, wenn der Serverstand neu ist. */
+      skipUploadWhenUnchanged: true,
+    });
+    if (!result.ok) return;
+
     setLocks(await loadLockFile(ctx));
-    if (snapshot.status === 'offline' || snapshot.status === 'error') {
-      update({
-        status: 'online',
-        detail: 'Mit Server verbunden.',
-        lastSyncAt: readLastSync(ctx.project.id),
-      });
-    }
   } catch (err) {
     const failure = describeFailure(err);
     update({ status: failure.status, detail: failure.detail });
@@ -634,6 +663,12 @@ interface RemoteSnapshot {
   project: Project;
   hashes: Record<string, string>;
   signatures: Record<string, string>;
+  usedArchive: boolean;
+}
+
+interface PullResult {
+  /** true, wenn ein neuer Serverstand eingemischt und gezeichnet wurde. */
+  changed: boolean;
   usedArchive: boolean;
 }
 
@@ -886,9 +921,11 @@ async function downloadRemoteSnapshot(
   };
 }
 
-async function pullRemote(ctx: SyncContext): Promise<boolean> {
+async function pullRemote(ctx: SyncContext): Promise<PullResult> {
   const project = state.project;
-  if (!project || project.id !== ctx.project.id) return false;
+  if (!project || project.id !== ctx.project.id) {
+    return { changed: false, usedArchive: false };
+  }
 
   const projectFolder = joinServerPath(
     ctx.conn.path,
@@ -909,7 +946,7 @@ async function pullRemote(ctx: SyncContext): Promise<boolean> {
       (item) => item.type === 'file' && item.name === 'project.json',
     );
     if (entry && remoteSignature(entry) === knownProjectSignature) {
-      return false;
+      return { changed: false, usedArchive: false };
     }
   }
 
@@ -940,7 +977,7 @@ async function pullRemote(ctx: SyncContext): Promise<boolean> {
           });
         }
       }
-      return false;
+      return { changed: false, usedArchive: false };
     }
   }
 
@@ -948,25 +985,31 @@ async function pullRemote(ctx: SyncContext): Promise<boolean> {
     base: project,
     projectJsonBytes,
   });
-  if (!snapshot) return false;
+  if (!snapshot) return { changed: false, usedArchive: false };
 
   /* Während des Downloads kann das Projekt gewechselt haben. */
-  if (state.project?.id !== project.id) return snapshot.usedArchive;
+  if (state.project?.id !== project.id) {
+    return { changed: false, usedArchive: snapshot.usedArchive };
+  }
 
   writeFileHashes(ctx, snapshot.hashes);
   writeFileSignatures(ctx, snapshot.signatures);
 
   const lastSync = readLastSync(project.id);
   if (lastSync && snapshot.project.updatedAt <= lastSync) {
-    return snapshot.usedArchive;
+    return { changed: false, usedArchive: snapshot.usedArchive };
   }
 
   const merged = await runMergeFlow(project, snapshot.project);
-  state.project = touchProject(merged);
+  /* Nur einen neuen Zeitstempel setzen, wenn lokal etwas hinzugekommen ist.
+     Sonst würde jedes Gerät die Änderung des anderen erneut hochladen. */
+  state.project = projectsHaveSameContent(merged, snapshot.project)
+    ? { ...merged, updatedAt: snapshot.project.updatedAt }
+    : touchProject(merged);
   await persist();
   render();
   showToast('Serverstand wurde zusammengeführt.', 'info');
-  return snapshot.usedArchive;
+  return { changed: true, usedArchive: snapshot.usedArchive };
 }
 
 async function uploadProject(ctx: SyncContext): Promise<void> {
@@ -1058,6 +1101,10 @@ export interface SyncRunResult {
 async function runSync(opts: {
   pull: boolean;
   manual: boolean;
+  /** Hintergrundprüfung: kein „Sync läuft“-Status, solange nichts passiert. */
+  background?: boolean;
+  /** Nur hochladen, wenn der Serverstand tatsächlich Änderungen hatte. */
+  skipUploadWhenUnchanged?: boolean;
 }): Promise<SyncRunResult> {
   const ctx = context();
   if (!ctx) {
@@ -1086,19 +1133,32 @@ async function runSync(opts: {
   }
 
   busy = true;
-  update({
-    status: 'syncing',
-    detail: 'Synchronisierung läuft …',
-    lastSyncAt: readLastSync(ctx.project.id),
-  });
+  if (!opts.background) {
+    update({
+      status: 'syncing',
+      detail: 'Synchronisierung läuft …',
+      lastSyncAt: readLastSync(ctx.project.id),
+    });
+  }
 
   try {
     await checkServer(ctx.conn, ctx.token);
-    const usedArchive = opts.pull ? await pullRemote(ctx) : false;
-    await uploadProject(ctx);
+    const pulled = opts.pull
+      ? await pullRemote(ctx)
+      : { changed: false, usedArchive: false };
+    if (
+      !opts.skipUploadWhenUnchanged ||
+      pulled.changed ||
+      pulled.usedArchive ||
+      uploadPending
+    ) {
+      uploadPending = true;
+      await uploadProject(ctx);
+      uploadPending = false;
+    }
     /* Die alte ZIP-Sicherung nur entfernen, wenn sie tatsächlich gelesen
        wurde – sonst entstünde bei jedem Abgleich ein unnötiger 404-Request. */
-    if (usedArchive) {
+    if (pulled.usedArchive) {
       try {
         await deleteFile(ctx.conn, ctx.token, projectArchiveName(ctx.project.id));
       } catch {
@@ -1159,6 +1219,7 @@ export function scheduleAutoSync(): void {
   if (!project?.server || !isLinkedServer(project.server)) return;
   if (!readServerToken(project.server)) return;
   if (autoTimer) clearTimeout(autoTimer);
+  uploadPending = true;
   autoTimer = setTimeout(() => {
     autoTimer = null;
     void runSync({ pull: false, manual: false });
@@ -1174,6 +1235,7 @@ export async function startProjectSync(): Promise<void> {
     clearTimeout(autoTimer);
     autoTimer = null;
   }
+  uploadPending = false;
   currentLocks = {};
   lockFileKnown = false;
   window.dispatchEvent(new CustomEvent('ldc:locks-changed'));

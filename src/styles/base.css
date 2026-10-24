@@ -87,6 +87,13 @@ html {
   overflow-x: hidden;
 }
 
+html,
+body {
+  /* Kein Gummiband-/Pull-to-refresh-Scrollen: verhindert, dass die fixierte
+     Bottom-Navbar am Seitenrand mitwandert (besonders auf iOS). */
+  overscroll-behavior-y: none;
+}
+
 body {
   background: var(--bg);
   color: var(--text);

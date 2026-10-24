@@ -66,8 +66,13 @@ export async function newTask(): Promise<void> {
   if (!project) return;
   const result = await openTaskForm({ mode: 'create', project });
   if (!result || result.delete) return;
-  const task = createTask(project.id, result.input);
-  state.project = touchProject({ ...project, tasks: [...project.tasks, task] });
+
+  /* Während das Formular offen war, kann ein Serverabgleich neue Aufgaben
+     eingemischt haben – deshalb den aktuellen Stand verwenden. */
+  const current = state.project;
+  if (!current || current.id !== project.id) return;
+  const task = createTask(current.id, result.input);
+  state.project = touchProject({ ...current, tasks: [...current.tasks, task] });
   schedulePersist();
   render();
   showToast('Aufgabe erstellt.', 'success');
@@ -162,15 +167,21 @@ export async function deleteTasks(ids: string[]): Promise<void> {
   if (removed.length === 0) return;
 
   await addToTrash(project.id, removed);
+
+  /* Nach dem asynchronen Papierkorb-Schreiben den aktuellen Stand verwenden,
+     damit ein zwischenzeitlicher Serverabgleich nicht überschrieben wird. */
+  const current = state.project;
+  if (!current || current.id !== project.id) return;
+
   const deletedAt = new Date().toISOString();
   const removedIds = new Set(removed.map((t) => t.id));
   const deletedTasks = [
-    ...(project.deletedTasks ?? []).filter((ref) => !removedIds.has(ref.id)),
+    ...(current.deletedTasks ?? []).filter((ref) => !removedIds.has(ref.id)),
     ...removed.map((t) => ({ id: t.id, deletedAt })),
   ];
   state.project = touchProject({
-    ...project,
-    tasks: project.tasks.filter((t) => !idSet.has(t.id)),
+    ...current,
+    tasks: current.tasks.filter((t) => !idSet.has(t.id)),
     deletedTasks,
   });
   schedulePersist();
@@ -212,7 +223,12 @@ export async function bulkStatus(
     editedBy: fields.editedBy,
     editedAt: fields.editedAt,
   };
-  const { updated, skipped } = applyBulkStatus(project.tasks, new Set(allowedIds), bulk);
+
+  /* Nach dem Dialog den aktuellen Stand verwenden, falls inzwischen ein
+     Serverabgleich neue Aufgaben eingemischt hat. */
+  const current = state.project;
+  if (!current || current.id !== project.id) return;
+  const { updated, skipped } = applyBulkStatus(current.tasks, new Set(allowedIds), bulk);
   if (updated.length === 0) {
     showToast('Keine Aufgabe konnte geändert werden.', 'error');
     return;
@@ -220,8 +236,8 @@ export async function bulkStatus(
 
   const updatedById = new Map(updated.map((t) => [t.id, t]));
   state.project = touchProject({
-    ...project,
-    tasks: project.tasks.map((t) => updatedById.get(t.id) ?? t),
+    ...current,
+    tasks: current.tasks.map((t) => updatedById.get(t.id) ?? t),
   });
   schedulePersist();
   render();
