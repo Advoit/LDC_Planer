@@ -780,6 +780,9 @@ function collectTaskRefs(
     for (const key of ['images', 'afterImages', 'documents', 'afterDocuments']) {
       collectRefHashes(data[key], dir, out);
     }
+    /* Vorschaubild hat keinen Hash im JSON – bei geändertem Aufgabenordner
+       wird es gezielt mitgeladen. */
+    if (data.thumbnail) out.set(`${dir}/thumbnail.png`, '');
   } catch {
     /* Ungültige task.json – die Aufgabe wird später übersprungen. */
   }
@@ -816,6 +819,7 @@ async function downloadRemoteSnapshot(
     readDirIds(ctx),
     knownHashes,
     options.projectEntries,
+    true,
   );
   const entries = tree?.files ?? null;
   const remoteSignatures: Record<string, string> = {};
@@ -884,7 +888,14 @@ async function downloadRemoteSnapshot(
         const local = localJsonFiles.get(path);
         const signature = remoteSignatures[path];
         const knownHash = knownHashes[path];
-        if (local && signature && knownSignatures[path] === signature) {
+        /* In übersprungenen Ordnern ist die Ordner-ID bereits der Beweis,
+           dass die Datei unverändert ist – eine Dateisignatur fehlt dort. */
+        const trustedByDir = tree.unchanged.has(path);
+        if (
+          local &&
+          knownHash &&
+          ((signature && knownSignatures[path] === signature) || trustedByDir)
+        ) {
           let localHash = localJsonHashes.get(path);
           if (!localHash) {
             localHash = await hashBytes(local);
@@ -916,6 +927,12 @@ async function downloadRemoteSnapshot(
       }
       step();
     }
+
+    /* Pfade aus den JSON-Referenzen ergänzen: Bei geänderten Aufgaben werden
+       die Anhänge nicht mehr über einen Ordner-Aufruf, sondern direkt über
+       ihre Referenz gefunden. */
+    const allPaths = new Set(paths);
+    for (const path of remoteRefHashes.keys()) allPaths.add(path);
 
     /* Nur die Anhänge dekodieren, die für geänderte/neue Aufgaben wirklich
        gebraucht werden. Unveränderte Aufgaben liefern ihre lokalen Daten. */
@@ -956,7 +973,7 @@ async function downloadRemoteSnapshot(
       (taskId) => `${projectFolder}/tasks/${taskId}/`,
     );
 
-    for (const path of paths) {
+    for (const path of allPaths) {
       if (handled.has(path)) continue;
 
       /* Anhänge unveränderter Aufgaben werden lokal wiederverwendet. */
@@ -1019,7 +1036,7 @@ async function downloadRemoteSnapshot(
       }
       const computed = await hashProjectFiles(Object.fromEntries(files));
       hashes = {};
-      for (const path of paths) {
+      for (const path of allPaths) {
         const hash = computed[path] ?? knownHashes[path];
         if (hash) hashes[path] = hash;
       }

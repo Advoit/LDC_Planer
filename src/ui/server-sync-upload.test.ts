@@ -425,16 +425,29 @@ describe('Automatischer Abgleich beim Polling', () => {
     saveServerToken(local.server!, 'secret');
     state.project = local;
 
+    const remoteDocBytes = Uint8Array.from([9, 8, 7]);
+    const remoteDoc: ProjectDocument = {
+      id: 'D1',
+      name: 'Plan.pdf',
+      mime: 'application/pdf',
+      size: remoteDocBytes.length,
+      dataUrl: 'data:application/pdf;base64,CQgH',
+      hash: await sha256Hex(remoteDocBytes.buffer),
+    };
     const remote: Project = {
       ...local,
       updatedAt: '2026-02-02T10:00:00.000Z',
-      tasks: [makeTask('T0', 'Bereits vorhanden'), makeTask()],
+      tasks: [
+        makeTask('T0', 'Bereits vorhanden'),
+        { ...makeTask(), documents: [remoteDoc] },
+      ],
     };
     const rootName = 'LDC-Projekt-ABCD1234';
     const rootPath = `${CONN.path}/${rootName}`;
     const projectPath = `${rootPath}/project.json`;
     const unchangedTaskPath = `${rootPath}/tasks/T0/task.json`;
     const newTaskPath = `${rootPath}/tasks/T1/task.json`;
+    const newDocPath = `${rootPath}/tasks/T1/documents/D1.pdf`;
     let remoteFiles = buildProjectFiles(remote, { includeServer: false });
     const oldFiles = buildProjectFiles(local, { includeServer: false });
     const hashOf = async (bytes: Uint8Array): Promise<string> =>
@@ -465,6 +478,12 @@ describe('Automatischer Abgleich beim Polling', () => {
       }),
     );
     store.set(
+      'ldc.seafile.dirIds',
+      JSON.stringify({
+        [key]: { [`${rootPath}/tasks/T0`]: 'task-0' },
+      }),
+    );
+    store.set(
       'ldc.seafile.lastSync',
       JSON.stringify({ ABCD1234: '2026-02-01T10:00:00.000Z' }),
     );
@@ -489,7 +508,7 @@ describe('Automatischer Abgleich beim Polling', () => {
     const downloads: string[] = [];
     vi.stubGlobal('document', { hidden: false });
 
-    mockFetch((url) => {
+    const calls = mockFetch((url) => {
       if (url === `${BASE}/`) return json({ name: 'Bibliothek' });
       if (url.startsWith(`${BASE}/dir/?p=`)) {
         const path = repoPathFromUrl(url);
@@ -533,7 +552,16 @@ describe('Automatischer Abgleich beim Polling', () => {
     expect(state.project?.tasks[1]?.name).toBe('Vom anderen Gerät');
     /* Unveränderte task.json bleibt lokal, nur die neue wird geladen. */
     expect(downloads).toContain(newTaskPath);
+    /* Anhänge einer geänderten Aufgabe werden über die task.json gefunden. */
+    expect(downloads).toContain(newDocPath);
     expect(downloads).not.toContain(unchangedTaskPath);
+    /* Aufgabenordner werden nicht mehr einzeln gelistet (kein 404-Lärm). */
+    const taskDirCalls = calls.filter((call) => {
+      if (!call.url.includes('/dir/?p=')) return false;
+      const path = repoPathFromUrl(call.url);
+      return /\/tasks\/[A-Za-z0-9]{8}$/.test(path);
+    });
+    expect(taskDirCalls).toEqual([]);
     /* Reiner Serverstand: lokal wurde nichts geändert, also nicht zurückschreiben. */
     expect(uploads).toBe(0);
 

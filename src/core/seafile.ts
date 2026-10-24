@@ -627,6 +627,8 @@ export async function listFilesRecursiveDetailedCached(
   knownHashes: Record<string, string>,
   /** Bereits gelisteter Wurzelordner – spart einen doppelten Aufruf. */
   knownRootEntries?: RemoteDirEntry[] | null,
+  /** Aufgabenordner nicht einzeln listen; `task.json` wird direkt geladen. */
+  omitTaskDirContents = false,
 ): Promise<RemoteTreeSnapshot | null> {
   const root = toRepoPath(conn, path);
   const files: RemoteFileEntry[] = [];
@@ -656,18 +658,29 @@ export async function listFilesRecursiveDetailedCached(
     }
   };
 
+  const taskDirParent = `${root.replace(/\/+$/, '')}/tasks`;
   type Level = { dir: string; entries: RemoteDirEntry[] };
   let level: Level[] = [{ dir: root, entries: rootEntries }];
 
   while (level.length > 0) {
     const nextDirs: string[] = [];
     for (const { dir, entries } of level) {
+      const insideTaskParent =
+        omitTaskDirContents && dir.replace(/\/+$/, '') === taskDirParent;
       for (const entry of entries) {
         const child = `${dir.replace(/\/+$/, '')}/${entry.name}`;
         if (entry.type === 'dir') {
           if (entry.id) dirIds[child] = entry.id;
           if (entry.id && knownDirIds[child] === entry.id) {
             carryForward(child);
+          } else if (insideTaskParent) {
+            /* Kein Ordner-GET auf /tasks/<id>: Die task.json wird direkt
+               geladen. Das vermeidet 404-Lärm bei inzwischen gelöschten
+               Aufgabenordnern und spart eine Anfrage pro Aufgabe. */
+            files.push({
+              path: `${child}/task.json`,
+              name: 'task.json',
+            });
           } else {
             nextDirs.push(child);
           }
