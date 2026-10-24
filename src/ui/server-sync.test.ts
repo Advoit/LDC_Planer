@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { testServerConnection } from './server-sync';
+import {
+  filesToRemove,
+  parentDirsWithin,
+  testServerConnection,
+} from './server-sync';
 import type { SeafileConnection } from '../domain/server';
 
 const CONN: SeafileConnection = {
@@ -47,6 +51,36 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('filesToRemove', () => {
+  it('findet nur die nicht mehr verwendeten Dateien', () => {
+    expect(
+      filesToRemove(
+        ['/P/LDC-Projekt-A/a.txt', '/P/LDC-Projekt-A/b.txt'],
+        ['/P/LDC-Projekt-A/b.txt', '/P/LDC-Projekt-A/c.txt'],
+      ),
+    ).toEqual(['/P/LDC-Projekt-A/a.txt']);
+  });
+});
+
+describe('parentDirsWithin', () => {
+  it('liefert die Unterordner bis zum Projektordner', () => {
+    expect(
+      parentDirsWithin('/P/LDC-Projekt-A', '/P/LDC-Projekt-A/tasks/T1/images/x.png'),
+    ).toEqual([
+      '/P/LDC-Projekt-A/tasks/T1/images/',
+      '/P/LDC-Projekt-A/tasks/T1/',
+      '/P/LDC-Projekt-A/tasks/',
+    ]);
+  });
+
+  it('liefert nichts für Dateien im Projektstamm oder außerhalb', () => {
+    expect(parentDirsWithin('/P/LDC-Projekt-A', '/P/LDC-Projekt-A/project.json')).toEqual(
+      [],
+    );
+    expect(parentDirsWithin('/P/LDC-Projekt-A', '/P/Anderes/x.txt')).toEqual([]);
+  });
+});
+
 describe('testServerConnection', () => {
   it('schreibt, liest und löscht eine Testdatei', async () => {
     let uploaded = '';
@@ -55,7 +89,10 @@ describe('testServerConnection', () => {
       if (url.startsWith(`${BASE}/upload-link/`)) return json(UPLOAD);
       if (url.startsWith(UPLOAD)) {
         const form = init.body as FormData;
+        expect(form.get('parent_dir')).toBe('/');
+        expect(form.get('relative_path')).toBe('Baustelle/');
         const file = form.get('file') as File;
+        expect(file.name).toBe('LDC-Test-ABCD1234.txt');
         uploaded = await file.text();
         return new Response('ok');
       }
@@ -124,12 +161,13 @@ describe('testServerConnection', () => {
     const calls = mockFetch(async (url, method, init) => {
       if (url === `${BASE}/`) return new Response('', { status: 403 });
       if (url === `${repoBase}/repo-info/`) return json({ repo_id: 'repo-1' });
-      if (url === `${repoBase}/upload-link/?path=%2FBaustelle`) {
+      if (url === `${repoBase}/upload-link/?path=%2F`) {
         return json(repoUpload);
       }
       if (url.startsWith(repoUpload)) {
         const form = init.body as FormData;
-        expect(form.get('parent_dir')).toBe('/Baustelle');
+        expect(form.get('parent_dir')).toBe('/');
+        expect(form.get('relative_path')).toBe('Baustelle/');
         uploaded = await (form.get('file') as File).text();
         return new Response('ok');
       }

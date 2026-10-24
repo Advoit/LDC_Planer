@@ -28,6 +28,16 @@ function repoApi(conn: SeafileConnection, suffix: string): string {
   return apiUrl(conn, `/api2/repos/${encodeURIComponent(conn.repoId)}/${suffix}`);
 }
 
+/** Pfad innerhalb der Bibliothek – relativ oder bereits absolut. */
+function toRepoPath(conn: SeafileConnection, path: string): string {
+  return path.startsWith('/') ? path : joinServerPath(conn.path, path);
+}
+
+function splitRepoPath(path: string): { dir: string; name: string } {
+  const index = path.lastIndexOf('/');
+  return { dir: path.slice(0, index + 1), name: path.slice(index + 1) };
+}
+
 /* ── Token-Arten ──
    Persönliche API-Token laufen über /api2/repos/<id>/… . Bibliotheks-Token
    (Seafile: Bibliothek → Erweitert → API-Token) akzeptiert Seafile nur über
@@ -215,6 +225,76 @@ async function getUploadLink(
   return link;
 }
 
+/**
+ * Lädt mehrere Dateien in einem Durchgang hoch. Der Upload-Link gilt für das
+ * Hauptverzeichnis; `relative_path` legt die Unterordner an (auch mehrere
+ * Ebenen). So entsteht die Ordnerstruktur direkt auf dem Server.
+ */
+export async function uploadFiles(
+  conn: SeafileConnection,
+  token: string,
+  files: Array<{ path: string; content: Blob }>,
+  onProgress?: (done: number, total: number) => void,
+): Promise<void> {
+  if (files.length === 0) return;
+  const uploadLink = await getUploadLink(conn, token, '/');
+
+  for (let i = 0; i < files.length; i++) {
+    const repoPath = toRepoPath(conn, files[i].path);
+    const { dir, name } = splitRepoPath(repoPath);
+    if (!name) {
+      throw new SeafileError('http', `Ungültiger Dateipfad: ${repoPath}`);
+    }
+
+    const form = new FormData();
+    form.append('file', files[i].content, name);
+    form.append('parent_dir', '/');
+    const relativeDir = dir.replace(/^\/+/, '');
+    if (relativeDir) form.append('relative_path', relativeDir);
+    form.append('replace', '1');
+
+    const separator = uploadLink.includes('?') ? '&' : '?';
+    try {
+      await send(
+        uploadLink + separator + 'ret-json=1',
+        { method: 'POST', body: form },
+        null,
+        120000,
+      );
+    } catch (err) {
+      if (err instanceof SeafileError && err.kind === 'notfound') {
+        throw new SeafileError(
+          'notfound',
+          `Die Datei „${name}“ wurde nicht hochgeladen: Der Ordner „${dir}“ wurde nicht gefunden.`,
+          404,
+        );
+      }
+      throw err;
+    }
+    onProgress?.(i + 1, files.length);
+  }
+}
+
+/** Lädt eine einzelne Datei an einen Pfad innerhalb der Bibliothek. */
+export async function uploadFileAtPath(
+  conn: SeafileConnection,
+  token: string,
+  path: string,
+  content: Blob,
+): Promise<void> {
+  await uploadFiles(conn, token, [{ path, content }]);
+}
+
+export async function uploadTextAtPath(
+  conn: SeafileConnection,
+  token: string,
+  path: string,
+  text: string,
+  mime = 'text/plain;charset=utf-8',
+): Promise<void> {
+  await uploadFileAtPath(conn, token, path, new Blob([text], { type: mime }));
+}
+
 /** Lädt eine Datei in den verknüpften Ordner (vorhandene Namen werden ersetzt). */
 export async function uploadFile(
   conn: SeafileConnection,
@@ -267,13 +347,13 @@ export async function uploadText(
   await uploadFile(conn, token, name, new Blob([text], { type: mime }));
 }
 
-/** Liest eine Datei; `null`, wenn sie noch nicht existiert. */
-export async function downloadFile(
+/** Liest eine Datei an einem Pfad innerhalb der Bibliothek. */
+export async function downloadFileAtPath(
   conn: SeafileConnection,
   token: string,
-  name: string,
+  path: string,
 ): Promise<Uint8Array | null> {
-  const filePath = joinServerPath(conn.path, name);
+  const filePath = toRepoPath(conn, path);
   const url = isRepoToken(conn, token)
     ? repoTokenApi(conn, `download-link/?path=${encodeURIComponent(filePath)}`)
     : repoApi(conn, `file/?p=${encodeURIComponent(filePath)}`);
@@ -297,23 +377,40 @@ export async function downloadFile(
   return new Uint8Array(await fileResponse.arrayBuffer());
 }
 
+/** Liest eine Datei; `null`, wenn sie noch nicht existiert. */
+export async function downloadFile(
+  conn: SeafileConnection,
+  token: string,
+  name: string,
+): Promise<Uint8Array | null> {
+  return downloadFileAtPath(conn, token, joinServerPath(conn.path, name));
+}
+
+export async function downloadTextAtPath(
+  conn: SeafileConnection,
+  token: string,
+  path: string,
+): Promise<string | null> {
+  const bytes = await downloadFileAtPath(conn, token, path);
+  if (!bytes) return null;
+  return new TextDecoder().decode(bytes);
+}
+
 export async function downloadText(
   conn: SeafileConnection,
   token: string,
   name: string,
 ): Promise<string | null> {
-  const bytes = await downloadFile(conn, token, name);
-  if (!bytes) return null;
-  return new TextDecoder().decode(bytes);
+  return downloadTextAtPath(conn, token, joinServerPath(conn.path, name));
 }
 
-/** Löscht eine Datei. `false`, wenn sie bereits weg war. */
-export async function deleteFile(
+/** Löscht eine Datei an einem Pfad innerhalb der Bibliothek. */
+export async function deleteFileAtPath(
   conn: SeafileConnection,
   token: string,
-  name: string,
+  path: string,
 ): Promise<boolean> {
-  const filePath = joinServerPath(conn.path, name);
+  const filePath = toRepoPath(conn, path);
   const url = isRepoToken(conn, token)
     ? repoTokenApi(conn, `file/?path=${encodeURIComponent(filePath)}`)
     : repoApi(conn, `file/?p=${encodeURIComponent(filePath)}`);
@@ -324,6 +421,110 @@ export async function deleteFile(
     if (err instanceof SeafileError && err.kind === 'notfound') return false;
     throw err;
   }
+}
+
+/** Löscht ein leeres Verzeichnis; `false`, wenn es fehlt oder nicht leer ist. */
+export async function deleteDirectoryAtPath(
+  conn: SeafileConnection,
+  token: string,
+  path: string,
+): Promise<boolean> {
+  const repoPath = toRepoPath(conn, path);
+  const url = isRepoToken(conn, token)
+    ? repoTokenApi(conn, `dir/?path=${encodeURIComponent(repoPath)}`)
+    : repoApi(conn, `dir/?p=${encodeURIComponent(repoPath)}`);
+  try {
+    await send(url, { method: 'DELETE' }, token, 20000);
+    return true;
+  } catch (err) {
+    if (
+      err instanceof SeafileError &&
+      (err.kind === 'notfound' || err.kind === 'http')
+    ) {
+      return false;
+    }
+    throw err;
+  }
+}
+
+/** Löscht eine Datei. `false`, wenn sie bereits weg war. */
+export async function deleteFile(
+  conn: SeafileConnection,
+  token: string,
+  name: string,
+): Promise<boolean> {
+  return deleteFileAtPath(conn, token, joinServerPath(conn.path, name));
+}
+
+export interface RemoteDirEntry {
+  type: 'file' | 'dir';
+  name: string;
+}
+
+/** Liest ein Verzeichnis; `null`, wenn es nicht existiert. */
+export async function listDirectory(
+  conn: SeafileConnection,
+  token: string,
+  path: string,
+): Promise<RemoteDirEntry[] | null> {
+  const repoPath = toRepoPath(conn, path);
+  const url = isRepoToken(conn, token)
+    ? repoTokenApi(conn, `dir/?path=${encodeURIComponent(repoPath)}`)
+    : repoApi(conn, `dir/?p=${encodeURIComponent(repoPath)}`);
+  let response: Response;
+  try {
+    response = await send(url, { method: 'GET' }, token, 20000);
+  } catch (err) {
+    if (err instanceof SeafileError && err.kind === 'notfound') return null;
+    throw err;
+  }
+
+  const data = (await response.json().catch(() => null)) as unknown;
+  const rawList = Array.isArray(data)
+    ? data
+    : data &&
+        typeof data === 'object' &&
+        Array.isArray((data as { dirent_list?: unknown }).dirent_list)
+      ? (data as { dirent_list: unknown[] }).dirent_list
+      : [];
+  const entries: RemoteDirEntry[] = [];
+  for (const item of rawList) {
+    if (typeof item !== 'object' || item === null) continue;
+    const entry = item as { type?: unknown; name?: unknown };
+    if (
+      (entry.type === 'file' || entry.type === 'dir') &&
+      typeof entry.name === 'string' &&
+      entry.name
+    ) {
+      entries.push({ type: entry.type, name: entry.name });
+    }
+  }
+  return entries;
+}
+
+/** Liest alle Dateien eines Ordners rekursiv; `null`, wenn er fehlt. */
+export async function listFilesRecursive(
+  conn: SeafileConnection,
+  token: string,
+  path: string,
+): Promise<string[] | null> {
+  const root = toRepoPath(conn, path);
+  const files: string[] = [];
+
+  async function walk(dir: string): Promise<boolean> {
+    const entries = await listDirectory(conn, token, dir);
+    if (entries === null) return false;
+    for (const entry of entries) {
+      const child = `${dir.replace(/\/+$/, '')}/${entry.name}`;
+      if (entry.type === 'dir') await walk(child);
+      else files.push(child);
+    }
+    return true;
+  }
+
+  if (!(await walk(root))) return null;
+  files.sort();
+  return files;
 }
 
 /* ── Token & Geräte-ID: bleiben ausschließlich auf diesem Gerät ── */

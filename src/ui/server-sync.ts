@@ -13,7 +13,9 @@ import {
   isLockActive,
   normalizeLockFile,
   otherLockHolder,
+  joinServerPath,
   projectArchiveName,
+  projectFolderName,
   projectLockFileName,
   projectTestFileName,
   pruneLocks,
@@ -22,19 +24,23 @@ import type { LockFile, SeafileConnection, TaskLockEntry } from '../domain/serve
 import {
   SeafileError,
   checkServer,
+  deleteDirectoryAtPath,
   deleteFile,
+  deleteFileAtPath,
   downloadFile,
-  downloadText,
+  downloadFileAtPath,
+  downloadTextAtPath,
   getDeviceId,
+  listFilesRecursive,
   readServerToken,
   saveServerToken,
-  uploadFile,
-  uploadText,
+  uploadFiles,
+  uploadTextAtPath,
 } from '../core/seafile';
 import { getPreference, setPreference } from '../core/preferences';
 import { randomId } from '../core/id';
-import { buildProjectZip } from '../io/export';
-import { parseProjectZip } from '../io/import';
+import { buildProjectFiles } from '../io/export';
+import { parseProjectFiles, parseProjectZip } from '../io/import';
 import type { Project, ProjectServer } from '../domain/types';
 
 export type SyncStatus = 'unlinked' | 'online' | 'syncing' | 'offline' | 'error';
@@ -71,6 +77,7 @@ interface SyncContext {
 }
 
 const LAST_SYNC_KEY = 'seafile.lastSync';
+const FILE_LIST_KEY = 'seafile.files';
 const AUTO_SYNC_DELAY = 3000;
 const POLL_INTERVAL = 20_000;
 const HEARTBEAT_INTERVAL = 60_000;
@@ -122,6 +129,49 @@ function writeLastSync(projectId: string, iso: string): void {
   setPreference(LAST_SYNC_KEY, map);
 }
 
+/* Zuletzt hochgeladene Dateien – nur für das Aufräumen verwaister Dateien. */
+
+function fileListKey(ctx: SyncContext): string {
+  return `${ctx.conn.url.replace(/\/+$/, '')}|${ctx.conn.repoId}|${ctx.conn.path}|${ctx.project.id}`;
+}
+
+function readFileList(ctx: SyncContext): string[] {
+  const map = getPreference<Record<string, string[]>>(FILE_LIST_KEY, {});
+  const value = map[fileListKey(ctx)];
+  return Array.isArray(value) ? value.filter((path) => typeof path === 'string') : [];
+}
+
+function writeFileList(ctx: SyncContext, paths: string[]): void {
+  const map = { ...getPreference<Record<string, string[]>>(FILE_LIST_KEY, {}) };
+  map[fileListKey(ctx)] = paths;
+  setPreference(FILE_LIST_KEY, map);
+}
+
+/** Dateien, die nach dem Upload nicht mehr im Projekt vorkommen. */
+export function filesToRemove(previous: string[], next: string[]): string[] {
+  const nextSet = new Set(next);
+  return previous.filter((path) => !nextSet.has(path));
+}
+
+/** Ordner einer Datei bis zum Projektordner (ohne diesen selbst). */
+export function parentDirsWithin(
+  projectPrefix: string,
+  filePath: string,
+): string[] {
+  const out: string[] = [];
+  const slash = filePath.lastIndexOf('/');
+  if (slash <= 0) return out;
+  let dir = filePath.slice(0, slash + 1);
+  while (dir.startsWith(`${projectPrefix}/`) && dir !== `${projectPrefix}/`) {
+    out.push(dir);
+    const trimmed = dir.replace(/\/+$/, '');
+    const parentSlash = trimmed.lastIndexOf('/');
+    if (parentSlash < 0) break;
+    dir = trimmed.slice(0, parentSlash + 1);
+  }
+  return out;
+}
+
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : 'Unbekannter Fehler.';
 }
@@ -130,16 +180,10 @@ function errorText(err: unknown): string {
 function describeFailure(err: unknown): { status: SyncStatus; detail: string } {
   if (err instanceof SeafileError) {
     if (err.kind === 'auth') {
-      return {
-        status: 'error',
-        detail: 'Nicht verbunden – API-Token ungültig oder keine Berechtigung.',
-      };
+      return { status: 'error', detail: err.message };
     }
     if (err.kind === 'notfound') {
-      return {
-        status: 'error',
-        detail: 'Bibliothek oder Ordner nicht gefunden. Bitte den Server-Link prüfen.',
-      };
+      return { status: 'error', detail: err.message };
     }
     if (err.kind === 'network') {
       return {
@@ -177,10 +221,10 @@ async function loadLockFile(ctx: SyncContext): Promise<LockFile> {
 }
 
 async function writeLockFile(ctx: SyncContext, file: LockFile): Promise<void> {
-  await uploadText(
+  await uploadTextAtPath(
     ctx.conn,
     ctx.token,
-    projectLockFileName(ctx.project.id),
+    joinServerPath(ctx.conn.path, projectLockFileName(ctx.project.id)),
     JSON.stringify(file, null, 2),
     'application/json',
   );
@@ -485,15 +529,38 @@ async function pullRemote(ctx: SyncContext): Promise<void> {
   const project = state.project;
   if (!project) return;
 
-  const bytes = await downloadFile(
-    ctx.conn,
-    ctx.token,
-    projectArchiveName(project.id),
+  const projectFolder = joinServerPath(
+    ctx.conn.path,
+    projectFolderName(project.id),
   );
-  if (!bytes) return;
+  const paths = await listFilesRecursive(ctx.conn, ctx.token, projectFolder);
+  let remote: Project | null = null;
 
-  const remote = await parseProjectZip(toArrayBuffer(bytes));
-  if (!remote) return;
+  if (paths && paths.length > 0) {
+    const files = new Map<string, Uint8Array>();
+    for (let i = 0; i < paths.length; i++) {
+      const bytes = await downloadFileAtPath(ctx.conn, ctx.token, paths[i]);
+      if (bytes) files.set(paths[i], bytes);
+      update({
+        detail: `Serverdateien werden geladen (${i + 1}/${paths.length}) …`,
+      });
+    }
+    remote = await parseProjectFiles(files);
+    if (remote) writeFileList(ctx, paths);
+  }
+
+  /* Übergang: eine vorhandene Projekt-ZIP wird noch eingelesen. */
+  if (!remote) {
+    const bytes = await downloadFile(
+      ctx.conn,
+      ctx.token,
+      projectArchiveName(project.id),
+    );
+    if (!bytes) return;
+    remote = await parseProjectZip(toArrayBuffer(bytes));
+    if (!remote) return;
+  }
+
   /* Während des Downloads kann das Projekt gewechselt haben. */
   if (state.project?.id !== project.id) return;
 
@@ -510,11 +577,65 @@ async function pullRemote(ctx: SyncContext): Promise<void> {
 async function uploadProject(ctx: SyncContext): Promise<void> {
   const project = state.project;
   if (!project || project.id !== ctx.project.id) return;
-  await uploadFile(
-    ctx.conn,
-    ctx.token,
-    projectArchiveName(project.id),
-    buildProjectZip(project),
+
+  const files = buildProjectFiles(project, { includeServer: false });
+  const entries = Object.entries(files).map(([path, bytes]) => {
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    return { path, content: new Blob([copy]) };
+  });
+  /* Erst Bilder/Dokumente, dann task.json, zuletzt project.json – so verweist
+     keine JSON-Datei auf eine Datei, die noch nicht hochgeladen ist. */
+  const priority = (path: string): number => {
+    if (path.endsWith('/project.json')) return 2;
+    if (path.endsWith('/task.json')) return 1;
+    return 0;
+  };
+  entries.sort((a, b) => priority(a.path) - priority(b.path));
+
+  await uploadFiles(ctx.conn, ctx.token, entries, (done, total) => {
+    update({ detail: `Serverdateien werden hochgeladen (${done}/${total}) …` });
+  });
+
+  const newPaths = Object.keys(files).map((path) =>
+    joinServerPath(ctx.conn.path, path),
+  );
+  const projectPrefix = joinServerPath(
+    ctx.conn.path,
+    projectFolderName(ctx.project.id),
+  );
+  const previous = readFileList(ctx);
+  const staleDirs = new Set<string>();
+  let cleanupFailed = false;
+  for (const oldPath of filesToRemove(previous, newPaths)) {
+    /* Nur innerhalb des eigenen Projektordners aufräumen. */
+    if (!oldPath.startsWith(`${projectPrefix}/`)) continue;
+    for (const dir of parentDirsWithin(projectPrefix, oldPath)) {
+      staleDirs.add(dir);
+    }
+    try {
+      await deleteFileAtPath(ctx.conn, ctx.token, oldPath);
+    } catch {
+      cleanupFailed = true;
+    }
+  }
+  /* Leere Aufgaben-/Bildordner entfernen; nicht leere Ordner bleiben stehen. */
+  const dirs = [...staleDirs].sort(
+    (a, b) => b.split('/').length - a.split('/').length,
+  );
+  for (const dir of dirs) {
+    if (dir === `${projectPrefix}/` || !dir.startsWith(`${projectPrefix}/`)) {
+      continue;
+    }
+    try {
+      await deleteDirectoryAtPath(ctx.conn, ctx.token, dir);
+    } catch {
+      /* Nicht kritisch – der Ordner ist evtl. noch nicht leer. */
+    }
+  }
+  writeFileList(
+    ctx,
+    cleanupFailed ? [...new Set([...previous, ...newPaths])] : newPaths,
   );
   writeLastSync(project.id, new Date().toISOString());
 }
@@ -565,6 +686,12 @@ async function runSync(opts: {
     await checkServer(ctx.conn, ctx.token);
     if (opts.pull) await pullRemote(ctx);
     await uploadProject(ctx);
+    /* Die alte ZIP-Sicherung ist nach erfolgreichem Upload überflüssig. */
+    try {
+      await deleteFile(ctx.conn, ctx.token, projectArchiveName(ctx.project.id));
+    } catch {
+      /* Nicht kritisch – die Einzeldateien sind bereits hochgeladen. */
+    }
     if (state.project?.id !== ctx.project.id) {
       return { ok: false, error: 'Projekt wurde gewechselt.' };
     }
@@ -737,7 +864,7 @@ export async function testServerConnection(
   projectId: string,
 ): Promise<ServerTestResult> {
   const steps: ServerTestStep[] = [];
-  const name = projectTestFileName(projectId);
+  const testPath = joinServerPath(conn.path, projectTestFileName(projectId));
   const content = `LDC Planer Test ${new Date().toISOString()} ${randomId(6)}`;
   let uploaded = false;
   let error: string | null = null;
@@ -746,11 +873,11 @@ export async function testServerConnection(
     await checkServer(conn, token);
     steps.push({ label: 'Server und Bibliothek erreichbar', ok: true });
 
-    await uploadText(conn, token, name, content);
+    await uploadTextAtPath(conn, token, testPath, content);
     uploaded = true;
     steps.push({ label: 'Testdatei geschrieben', ok: true });
 
-    const read = await downloadText(conn, token, name);
+    const read = await downloadTextAtPath(conn, token, testPath);
     if (read === null) throw new Error('Testdatei wurde nicht gefunden.');
     if (read !== content) {
       throw new Error('Testdatei wurde mit anderem Inhalt gelesen.');
@@ -762,7 +889,7 @@ export async function testServerConnection(
   } finally {
     if (uploaded) {
       try {
-        await deleteFile(conn, token, name);
+        await deleteFileAtPath(conn, token, testPath);
         steps.push({ label: 'Testdatei gelöscht', ok: true });
       } catch (err) {
         const message = `Testdatei konnte nicht gelöscht werden: ${errorText(err)}`;

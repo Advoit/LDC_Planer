@@ -2,8 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   SeafileError,
   checkServer,
+  deleteDirectoryAtPath,
   deleteFile,
+  deleteFileAtPath,
+  downloadFileAtPath,
   downloadText,
+  listDirectory,
+  listFilesRecursive,
+  uploadFiles,
   uploadText,
 } from './seafile';
 import type { SeafileConnection } from '../domain/server';
@@ -278,6 +284,145 @@ describe('downloadText', () => {
     mockFetch(() => new Response('', { status: 404 }));
 
     await expect(downloadText(CONN, 'secret', 'fehlt.txt')).resolves.toBeNull();
+  });
+});
+
+describe('Einzeldateien an Pfaden', () => {
+  it('lädt mehrere Dateien mit relative_path in Unterordner', async () => {
+    const calls = mockFetch((url) => {
+      if (url === 'https://host.tld/api2/repos/repo-1/upload-link/?p=%2F') {
+        return json('https://host.tld:8082/upload-api/batch');
+      }
+      if (url.startsWith('https://host.tld:8082/upload-api/batch')) {
+        return new Response('ok');
+      }
+      throw new Error(`Unerwartete URL: ${url}`);
+    });
+    const progress: number[] = [];
+
+    await uploadFiles(
+      CONN,
+      'secret-batch',
+      [
+        { path: 'LDC-Projekt-ABCD/project.json', content: new Blob(['{}']) },
+        {
+          path: 'LDC-Projekt-ABCD/tasks/T1/task.json',
+          content: new Blob(['{}']),
+        },
+      ],
+      (done) => progress.push(done),
+    );
+
+    expect(calls[0].url).toBe('https://host.tld/api2/repos/repo-1/upload-link/?p=%2F');
+    const first = calls[1].init.body as FormData;
+    expect(first.get('parent_dir')).toBe('/');
+    expect(first.get('relative_path')).toBe('Haus 1/LDC-Projekt-ABCD/');
+    expect((first.get('file') as File).name).toBe('project.json');
+    const second = calls[2].init.body as FormData;
+    expect(second.get('relative_path')).toBe('Haus 1/LDC-Projekt-ABCD/tasks/T1/');
+    expect(progress).toEqual([1, 2]);
+  });
+
+  it('liest und löscht eine Datei an einem absoluten Pfad', async () => {
+    const filePath = '/Haus 1/LDC-Projekt-ABCD/project.json';
+    const download = 'https://files.tld/seafhttp/files/token/project.json';
+    const calls = mockFetch((url, init) => {
+      if (
+        url ===
+        'https://host.tld/api2/repos/repo-1/file/?p=%2FHaus%201%2FLDC-Projekt-ABCD%2Fproject.json'
+      ) {
+        return init.method === 'DELETE' ? new Response(null, { status: 200 }) : json(download);
+      }
+      if (url === download) return new Response('{"id":"PROJ"}');
+      throw new Error(`Unerwartete URL: ${url}`);
+    });
+
+    const bytes = await downloadFileAtPath(CONN, 'secret-path', filePath);
+    expect(new TextDecoder().decode(bytes!)).toBe('{"id":"PROJ"}');
+    await expect(deleteFileAtPath(CONN, 'secret-path', filePath)).resolves.toBe(true);
+    expect(calls.some((call) => call.init.method === 'DELETE')).toBe(true);
+  });
+
+  it('liest ein Verzeichnis über die persönliche API', async () => {
+    mockFetch(() =>
+      json([
+        { type: 'file', name: 'a.txt' },
+        { type: 'dir', name: 'Unterordner' },
+      ]),
+    );
+
+    await expect(
+      listDirectory(CONN, 'secret-list', '/Haus 1'),
+    ).resolves.toEqual([
+      { type: 'file', name: 'a.txt' },
+      { type: 'dir', name: 'Unterordner' },
+    ]);
+  });
+
+  it('liest ein Verzeichnis über die Bibliotheks-Token-API', async () => {
+    const calls = mockFetch((url) => {
+      if (url === 'https://host.tld/api2/repos/repo-1/') {
+        return new Response('', { status: 403 });
+      }
+      if (url === 'https://host.tld/api/v2.1/via-repo-token/repo-info/') {
+        return json({ repo_id: 'repo-1' });
+      }
+      if (
+        url ===
+        'https://host.tld/api/v2.1/via-repo-token/dir/?path=%2FHaus%201'
+      ) {
+        return json({ dirent_list: [{ type: 'file', name: 'b.txt' }] });
+      }
+      throw new Error(`Unerwartete URL: ${url}`);
+    });
+
+    await checkServer(CONN, 'repo-token-list');
+    await expect(
+      listDirectory(CONN, 'repo-token-list', '/Haus 1'),
+    ).resolves.toEqual([{ type: 'file', name: 'b.txt' }]);
+    expect(calls.some((call) => call.url.includes('via-repo-token/dir/'))).toBe(true);
+  });
+
+  it('löscht leere Ordner und lässt nicht leere stehen', async () => {
+    const calls = mockFetch((url) => {
+      if (
+        url ===
+        'https://host.tld/api2/repos/repo-1/dir/?p=%2FHaus%201%2FLeer'
+      ) {
+        return new Response(null, { status: 200 });
+      }
+      return new Response('', { status: 400 });
+    });
+
+    await expect(
+      deleteDirectoryAtPath(CONN, 'secret-dir', '/Haus 1/Leer'),
+    ).resolves.toBe(true);
+    await expect(
+      deleteDirectoryAtPath(CONN, 'secret-dir', '/Haus 1/Voll'),
+    ).resolves.toBe(false);
+    expect(calls.every((call) => call.init.method === 'DELETE')).toBe(true);
+  });
+
+  it('liest alle Dateien rekursiv', async () => {
+    mockFetch((url) => {
+      if (url === 'https://host.tld/api2/repos/repo-1/dir/?p=%2FHaus%201') {
+        return json([
+          { type: 'dir', name: 'Projekt' },
+          { type: 'file', name: 'a.txt' },
+        ]);
+      }
+      if (
+        url ===
+        'https://host.tld/api2/repos/repo-1/dir/?p=%2FHaus%201%2FProjekt'
+      ) {
+        return json([{ type: 'file', name: 'b.txt' }]);
+      }
+      throw new Error(`Unerwartete URL: ${url}`);
+    });
+
+    await expect(
+      listFilesRecursive(CONN, 'secret-tree', '/Haus 1'),
+    ).resolves.toEqual(['/Haus 1/Projekt/b.txt', '/Haus 1/a.txt']);
   });
 });
 

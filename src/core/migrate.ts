@@ -1,6 +1,7 @@
 /* ── Datenmigration – abwärtskompatibel zu alten App-Versionen ── */
 
 import type { Project, Task } from '../domain/types';
+import { normalizeServerPath } from '../domain/server';
 import type {
   DeletedTaskRef,
   ProjectDocument,
@@ -185,15 +186,16 @@ function normalizeServer(server: unknown): ProjectServer | undefined {
     !/^https?:\/\//i.test(s.url) ||
     typeof s.repoId !== 'string' ||
     !s.repoId.trim() ||
-    typeof s.path !== 'string' ||
-    !s.path.startsWith('/')
+    typeof s.path !== 'string'
   ) {
     return undefined;
   }
+  const normalizedPath = normalizeServerPath(s.path);
+  if (normalizedPath.error) return undefined;
   return {
     url: s.url.replace(/\/+$/, ''),
     repoId: s.repoId,
-    path: s.path,
+    path: normalizedPath.path,
     linkedAt: typeof s.linkedAt === 'string' ? s.linkedAt : '',
     ...(s.linkStyle === 'lib' || s.linkStyle === 'library'
       ? { linkStyle: s.linkStyle }

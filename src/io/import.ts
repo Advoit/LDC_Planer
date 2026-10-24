@@ -163,25 +163,14 @@ async function rebuildTasks(
   return tasks;
 }
 
-export async function parseProjectZip(
-  buffer: ArrayBuffer,
+/** Baut ein Projekt aus der entpackten Dateiliste (ZIP oder Serverordner). */
+export async function parseProjectFiles(
+  fileMap: Map<string, Uint8Array>,
   onProgress?: ProgressReporter,
 ): Promise<Project | null> {
   const yieldUi = createUiYielder();
-  reportProgress(onProgress, 'ZIP wird entpackt …');
-  await yieldUi();
 
-  const data = new Uint8Array(buffer);
-  let unzipped: Record<string, Uint8Array>;
-  try {
-    unzipped = await unzipAsync(data);
-  } catch {
-    return null;
-  }
-
-  const fileMap = new Map(Object.entries(unzipped));
-
-  /* Suchen: project.json irgendwo im ZIP */
+  /* Suchen: project.json irgendwo in den Dateien */
   let projectJsonBytes: Uint8Array | null = null;
   let root = '';
   for (const [path, bytes] of fileMap) {
@@ -261,4 +250,24 @@ export async function parseProjectZip(
   });
 
   return project;
+}
+
+/** Entpackt eine Projekt-ZIP und liest sie ein. */
+export async function parseProjectZip(
+  buffer: ArrayBuffer,
+  onProgress?: ProgressReporter,
+): Promise<Project | null> {
+  const yieldUi = createUiYielder();
+  reportProgress(onProgress, 'ZIP wird entpackt …');
+  await yieldUi();
+
+  const data = new Uint8Array(buffer);
+  let unzipped: Record<string, Uint8Array>;
+  try {
+    unzipped = await unzipAsync(data);
+  } catch {
+    return null;
+  }
+
+  return parseProjectFiles(new Map(Object.entries(unzipped)), onProgress);
 }

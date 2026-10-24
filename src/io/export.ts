@@ -2,6 +2,7 @@
 
 import { strToU8, zipSync } from 'fflate';
 import { exportBaseName } from '../core/file-name';
+import { projectFolderName } from '../domain/server';
 import type {
   DeletedTaskRef,
   Project,
@@ -122,21 +123,29 @@ function extensionFromName(name: string): string {
   return m ? `.${m[1].toLowerCase()}` : '.bin';
 }
 
+export interface ProjectFileOptions {
+  /** Die Seafile-Verknüpfung gehört nicht in die Serverdateien. */
+  includeServer?: boolean;
+}
+
 /**
- * Baut die Projekt-ZIP-Datei mit folgender Struktur:
+ * Baut die Projektdateien mit folgender Struktur – als ZIP und als einzelne
+ * Dateien für den Server:
  *   LDC-Projekt-<ID>/
  *     project.json
+ *     documents/<Dokument-ID>.pdf|…
  *     tasks/<Task-ID>/
  *       task.json
  *       thumbnail.png
  *       images/<Bild-ID>.png|.jpg|…
- *
- * Hinweis: Alte .ldcproj-Backups sind identische ZIP-Dateien und
- * bleiben weiterhin ladbar.
+ *       documents/<Dokument-ID>.pdf|…
  */
-export function buildProjectZip(project: Project): Blob {
+export function buildProjectFiles(
+  project: Project,
+  options: ProjectFileOptions = {},
+): Record<string, Uint8Array> {
   const files: Record<string, Uint8Array> = {};
-  const root = `LDC-Projekt-${project.id}`;
+  const root = projectFolderName(project.id);
 
   const exportedProject: ExportedProject = {
     schemaVersion: project.schemaVersion,
@@ -151,7 +160,9 @@ export function buildProjectZip(project: Project): Blob {
     ),
     /* Nur mitgeben, wenn gesetzt – alte Sicherungen bleiben unverändert */
     ...(project.reportCover ? { reportCover: project.reportCover } : {}),
-    ...(project.server ? { server: project.server } : {}),
+    ...(options.includeServer !== false && project.server
+      ? { server: project.server }
+      : {}),
     ...(project.deletedTasks && project.deletedTasks.length > 0
       ? { deletedTasks: project.deletedTasks }
       : {}),
@@ -221,7 +232,12 @@ export function buildProjectZip(project: Project): Blob {
     }
   }
 
-  const zipped = zipSync(files, { level: 6 });
+  return files;
+}
+
+/** Baut die Projekt-ZIP-Datei aus denselben Dateien. */
+export function buildProjectZip(project: Project): Blob {
+  const zipped = zipSync(buildProjectFiles(project), { level: 6 });
   return new Blob([zipped], { type: 'application/zip' });
 }
 

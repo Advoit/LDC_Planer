@@ -51,6 +51,24 @@ describe('migrateProject', () => {
     expect(migrateProject({ id: 'Z', reportCover: { kennung: 5 } }).reportCover).toBeUndefined();
   });
 
+  it('normalisiert den gespeicherten Serverpfad', () => {
+    const project = migrateProject({
+      id: 'S1',
+      server: {
+        url: 'https://server.tld/',
+        repoId: 'r1',
+        path: '//Bauprojekte/Haus 1/',
+        linkedAt: '',
+      },
+    });
+    expect(project.server).toEqual({
+      url: 'https://server.tld',
+      repoId: 'r1',
+      path: '/Bauprojekte/Haus 1',
+      linkedAt: '',
+    });
+  });
+
   it('wirft bei unbekannter zukünftiger Version einen Fehler', () => {
     expect(() => migrateProject({ schemaVersion: 99, tasks: [] })).toThrow();
   });

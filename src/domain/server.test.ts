@@ -8,8 +8,10 @@ import {
   joinServerPath,
   normalizeLockFile,
   otherLockHolder,
+  normalizeServerPath,
   parseSeafileLink,
   projectArchiveName,
+  projectFolderName,
   projectLockFileName,
   pruneLocks,
   safeNamePart,
@@ -109,8 +111,33 @@ describe('parseSeafileLink', () => {
   });
 });
 
+describe('Zielordner', () => {
+  it('behandelt leer und / als Hauptverzeichnis', () => {
+    expect(normalizeServerPath('')).toEqual({ path: '/', error: null });
+    expect(normalizeServerPath('   ')).toEqual({ path: '/', error: null });
+    expect(normalizeServerPath('/')).toEqual({ path: '/', error: null });
+  });
+
+  it('ergänzt den führenden Schrägstrich und entfernt doppelte', () => {
+    expect(normalizeServerPath('Bauprojekte//Haus 1/')).toEqual({
+      path: '/Bauprojekte/Haus 1',
+      error: null,
+    });
+    expect(normalizeServerPath('\\Bauprojekte\\Haus 1')).toEqual({
+      path: '/Bauprojekte/Haus 1',
+      error: null,
+    });
+  });
+
+  it('lehnt Pfad-Ausbrüche ab', () => {
+    expect(normalizeServerPath('/Bau/../Haus').error).not.toBeNull();
+    expect(normalizeServerPath('/Bau/./Haus').error).not.toBeNull();
+  });
+});
+
 describe('Dateinamen und Pfade', () => {
   it('erzeugt stabile Namen und entschärft Projekt-IDs', () => {
+    expect(projectFolderName('ABCD2345')).toBe('LDC-Projekt-ABCD2345');
     expect(projectArchiveName('ABCD2345')).toBe('LDC-Projekt-ABCD2345.zip');
     expect(projectLockFileName('ABCD2345')).toBe('LDC-Projekt-ABCD2345.locks.json');
     expect(safeNamePart('../böse/id')).toBe('___b_se_id');

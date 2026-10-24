@@ -15,6 +15,7 @@ import {
 } from './server-sync';
 import {
   isLinkedServer,
+  normalizeServerPath,
   parseSeafileLink,
   serverLink,
 } from '../domain/server';
@@ -39,6 +40,16 @@ export function openServerModal(): void {
     spellcheck: 'false',
     autocomplete: 'off',
     inputmode: 'url',
+  }) as HTMLInputElement;
+
+  const pathInput = el('input', {
+    type: 'text',
+    class: 'input',
+    placeholder: '/ (Hauptverzeichnis)',
+    value: existing ? existing.path : '/',
+    spellcheck: 'false',
+    autocomplete: 'off',
+    inputmode: 'text',
   }) as HTMLInputElement;
 
   const tokenInput = el('input', {
@@ -73,6 +84,9 @@ export function openServerModal(): void {
 
   let testPassed = false;
   let running = false;
+  /* Bei einer bestehenden Verknüpfung ist der gespeicherte Zielordner
+     maßgeblich; ein neuer Link soll ihn nicht überschreiben. */
+  let pathTouched = Boolean(existing);
   let handle: ReturnType<typeof openModal>;
 
   function setFeedback(message: string, kind: FeedbackKind): void {
@@ -106,13 +120,24 @@ export function openServerModal(): void {
   function markChanged(): void {
     testPassed = false;
     linkInput.classList.remove('input-error');
+    pathInput.classList.remove('input-error');
     tokenInput.classList.remove('input-error');
     feedback.className = 'server-feedback';
     feedback.textContent = '';
     refreshButtons();
   }
 
-  linkInput.addEventListener('input', markChanged);
+  linkInput.addEventListener('input', () => {
+    const parsed = parseSeafileLink(linkInput.value);
+    if (parsed.connection && !pathTouched) {
+      pathInput.value = parsed.connection.path;
+    }
+    markChanged();
+  });
+  pathInput.addEventListener('input', () => {
+    pathTouched = true;
+    markChanged();
+  });
   tokenInput.addEventListener('input', markChanged);
 
   /** Speichert Link und Token lokal (noch ohne Verknüpfung). */
@@ -124,6 +149,18 @@ export function openServerModal(): void {
       return null;
     }
     linkInput.classList.remove('input-error');
+
+    const normalizedPath = normalizeServerPath(pathInput.value);
+    if (normalizedPath.error) {
+      pathInput.classList.add('input-error');
+      setFeedback(normalizedPath.error, 'error');
+      return null;
+    }
+    pathInput.value = normalizedPath.path;
+    const connection: SeafileConnection = {
+      ...parsed.connection,
+      path: normalizedPath.path,
+    };
 
     const token = tokenInput.value.trim();
     if (!token) {
@@ -140,23 +177,23 @@ export function openServerModal(): void {
     const previous = current.server;
     const linkedAt =
       previous &&
-      previous.url === parsed.connection.url &&
-      previous.repoId === parsed.connection.repoId
+      previous.url === connection.url &&
+      previous.repoId === connection.repoId
         ? previous.linkedAt
         : '';
 
     const server: ProjectServer = {
-      ...parsed.connection,
+      ...connection,
       linkedAt,
     };
 
-    saveServerToken(parsed.connection, token);
+    saveServerToken(connection, token);
     state.project = touchProject({ ...current, server });
     await persist();
     render();
     noteServerDraft();
     if (linkedAt) void pollOnce();
-    return { conn: parsed.connection, token };
+    return { conn: connection, token };
   }
 
   async function doAdd(): Promise<void> {
@@ -261,12 +298,17 @@ export function openServerModal(): void {
 
   const content = el('div', { class: 'server-form' }, [
     el('p', { class: 'export-hint' }, [
-      'Fügen Sie den Link der Seafile-Bibliothek oder eines Ordners darin ein und tragen Sie den API-Token ein. Beides bleibt auf diesem Gerät gespeichert – der Token wird nicht in die Projekt-ZIP geschrieben.',
+      'Fügen Sie den Link der Seafile-Bibliothek oder eines Ordners darin ein und tragen Sie den API-Token ein. Im Zielordner legt die App LDC-Projekt-<ID>/ mit einzelnen Dateien an. Beides bleibt auf diesem Gerät gespeichert – der Token wird nicht in die Projektdateien geschrieben.',
     ]),
     el('label', { class: 'field-label' }, ['Seafile-Link']),
     linkInput,
     el('p', { class: 'field-hint' }, [
-      'Form: https://server/library/<Bibliothek>/<Ordner> (ältere Server: /lib/…). Freigabe- und Upload-Links reichen für den Abgleich nicht aus.',
+      'Form: https://server/library/<Bibliothek>/<Ordner> (ältere Server: /lib/…). Der Ordner wird als Zielordner übernommen und kann unten angepasst werden. Freigabe- und Upload-Links reichen für den Abgleich nicht aus.',
+    ]),
+    el('label', { class: 'field-label' }, ['Zielordner']),
+    pathInput,
+    el('p', { class: 'field-hint' }, [
+      'Ordner in der Bibliothek, z. B. /Bauprojekte/Musterbau. Leer oder / = Hauptverzeichnis. Dort legt die App den Ordner LDC-Projekt-<ID>/ an.',
     ]),
     el('label', { class: 'field-label' }, ['API-Token']),
     tokenInput,

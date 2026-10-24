@@ -127,8 +127,38 @@ export function safeNamePart(value: string): string {
   return value.replace(/[^A-Za-z0-9_-]/g, '_');
 }
 
+/** Ordner eines Projekts auf dem Server. */
+export function projectFolderName(projectId: string): string {
+  return `LDC-Projekt-${safeNamePart(projectId)}`;
+}
+
 export function projectArchiveName(projectId: string): string {
-  return `LDC-Projekt-${safeNamePart(projectId)}.zip`;
+  return `${projectFolderName(projectId)}.zip`;
+}
+
+/* ── Zielordner ── */
+
+export interface NormalizedServerPath {
+  path: string;
+  error: string | null;
+}
+
+/**
+ * Bringt einen eingegebenen Zielordner in die Form `/A/B`. Leer und `/`
+ * bedeuten das Hauptverzeichnis der Bibliothek. `..` wird abgelehnt, damit
+ * der Upload nicht aus dem Zielbereich ausbrechen kann.
+ */
+export function normalizeServerPath(raw: string): NormalizedServerPath {
+  const value = raw.trim().replace(/\\/g, '/');
+  const withLeading = value.startsWith('/') ? value : `/${value}`;
+  const segments = withLeading.split('/').filter((segment) => segment.length > 0);
+  if (segments.some((segment) => segment === '.' || segment === '..')) {
+    return {
+      path: '/',
+      error: 'Der Zielordner darf nicht „.“ oder „..“ enthalten.',
+    };
+  }
+  return { path: `/${segments.join('/')}`, error: null };
 }
 
 export function projectLockFileName(projectId: string): string {

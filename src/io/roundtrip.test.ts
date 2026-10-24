@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildProjectZip } from './export';
-import { parseProjectZip } from './import';
+import { buildProjectFiles, buildProjectZip } from './export';
+import { parseProjectFiles, parseProjectZip } from './import';
 import { hashDataUrl } from '../core/hash';
 import type { ProgressUpdate } from '../core/progress';
 import type { Project, Task } from '../domain/types';
@@ -154,6 +154,44 @@ describe('Export/Import-Roundtrip', () => {
     const imported = await parseProjectZip(await blob.arrayBuffer());
     expect(imported).not.toBeNull();
     expect(imported!.reportCover).toBeUndefined();
+  });
+
+  it('übersteht den Datei-Zyklus ohne ZIP (Ablage auf dem Server)', async () => {
+    const project = await makeProject();
+    project.server = {
+      url: 'https://server.tld',
+      repoId: 'PROJ5678',
+      path: '/Bauprojekte',
+      linkedAt: '2026-02-01T10:00:00.000Z',
+    };
+
+    const files = buildProjectFiles(project, { includeServer: false });
+    const paths = Object.keys(files);
+    expect(paths).toContain('LDC-Projekt-PROJ5678/project.json');
+    expect(paths).toContain('LDC-Projekt-PROJ5678/tasks/TASK1234/task.json');
+    expect(
+      paths.some((path) => path.startsWith('LDC-Projekt-PROJ5678/tasks/TASK1234/images/IMG-1.')),
+    ).toBe(true);
+
+    const projectJson = JSON.parse(
+      new TextDecoder().decode(files['LDC-Projekt-PROJ5678/project.json']),
+    ) as { server?: unknown };
+    expect(projectJson.server).toBeUndefined();
+
+    /* Auf dem Server stehen die Dateien unter dem Zielordner. */
+    const serverFiles = new Map(
+      Object.entries(files).map(([path, bytes]) => [`/Bauprojekte/${path}`, bytes]),
+    );
+    const imported = await parseProjectFiles(serverFiles);
+    expect(imported).not.toBeNull();
+    expect(imported!.id).toBe('PROJ5678');
+    expect(imported!.tasks).toHaveLength(1);
+    expect(imported!.tasks[0].images[0].hash).toBe(project.tasks[0].images[0].hash);
+    expect(imported!.tasks[0].afterImages[0].dataUrl.startsWith('data:image/png')).toBe(
+      true,
+    );
+    /* Die Serverablage enthält bewusst keine Verknüpfungsdaten. */
+    expect(imported!.server).toBeUndefined();
   });
 
   it('liefert null bei ungültigen Daten', async () => {
