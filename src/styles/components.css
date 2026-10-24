@@ -6,9 +6,12 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: 'brand actions sync';
   align-items: center;
-  gap: var(--gap);
+  column-gap: var(--gap);
+  row-gap: 4px;
   padding: 12px var(--gap);
   background: var(--card-bg);
   background: color-mix(in srgb, var(--card-bg) 82%, transparent);
@@ -16,14 +19,13 @@
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   min-height: var(--toolbar-h);
-  flex-wrap: wrap;
 }
 
 .toolbar-brand {
+  grid-area: brand;
   display: flex;
   align-items: center;
   gap: 12px;
-  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -86,7 +88,7 @@
 }
 
 /* Desktop: Gruppen als Dropdown-Menüs (mobil stattdessen Bottom-Navbar) */
-.toolbar-actions { display: none; }
+.toolbar-actions { display: none; grid-area: actions; }
 
 .dropdown { position: relative; }
 
@@ -193,8 +195,22 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    flex: 0 0 auto;
-    margin-left: auto;
+    justify-self: end;
+  }
+}
+
+/* Schmale Fenster: Aktionen unter die Titelzeile; das Server-Icon bleibt
+   in der Zeile mit dem Projektnamen und ganz rechts. */
+@media (max-width: 900px) {
+  .toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'brand sync' 'actions actions';
+  }
+}
+
+@media (max-width: 639px) {
+  .toolbar {
+    grid-template-areas: 'brand sync';
   }
 }
 
@@ -1574,6 +1590,7 @@ body.bulk-open .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
 /* ═══════════════════ Seafile-Server & Sync-Status ═══════════════════ */
 
 .sync-status {
+  grid-area: sync;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1704,6 +1721,30 @@ body.bulk-open .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
 .server-step-mark { flex: 0 0 14px; font-weight: 700; }
 .server-step.ok .server-step-mark { color: var(--success); }
 .server-step.fail .server-step-mark { color: var(--error); }
+
+/* ── Projekt teilen ── */
+
+.share-link-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.share-link-row[hidden] { display: none; }
+
+.share-link-row .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.share-warning { margin-top: 4px; }
 
 /* ── Serverstatus-Info ── */
 

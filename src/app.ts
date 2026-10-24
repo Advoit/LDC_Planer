@@ -10,6 +10,7 @@ import { withProgress } from './ui/progress';
 import { toggleTheme } from './core/theme';
 import { maybeShowConsentNotice, showConsentNotice } from './ui/consent-banner';
 import { openServerModal } from './ui/server-modal';
+import { openShareModal } from './ui/share-modal';
 import { installSyncEvents, startProjectSync } from './ui/server-sync';
 import {
   importProjectFile,
@@ -71,6 +72,7 @@ function toolbarOptions(): Parameters<typeof buildToolbar>[0] {
     loadZip: () => void loadZip(),
     openSnapshots: () => showSnapshots(),
     openServer: () => openServerModal(),
+    openShare: () => openShareModal(),
     openTrash: () => showTrash(),
     openDocuments: () => void showProjectDocuments(),
     openInstandsetzungsreport: () => void showInstandsetzungsreport(),

@@ -5,6 +5,7 @@ import { createDropdown } from './dropdown';
 import { buildMobileNav } from './mobile-nav';
 import { buildSyncStatusButton } from './sync-status';
 import { resolvedTheme } from '../core/theme';
+import { isLinkedServer } from '../domain/server';
 import type { Project } from '../domain/types';
 
 export interface ToolbarHandlers {
@@ -14,6 +15,7 @@ export interface ToolbarHandlers {
   loadZip: () => void;
   openSnapshots: () => void;
   openServer: () => void;
+  openShare: () => void;
   openTrash: () => void;
   openDocuments: () => void;
   openInstandsetzungsreport: () => void;
@@ -54,37 +56,48 @@ function menuGroups(opts: ToolbarOptions): MenuGroup[] {
   const hasProject = project !== null;
   const dark = resolvedTheme() === 'dark';
 
+  const projectItems: MenuAction[] = [
+    { label: 'Neues Projekt', icon: 'folder-plus', onClick: handlers.newProject },
+    {
+      label: 'Meine Projekte',
+      icon: 'folder',
+      onClick: handlers.openProjects,
+    },
+    {
+      label: 'Speichern',
+      icon: 'download',
+      onClick: handlers.saveZip,
+      disabled: !hasProject,
+    },
+    { label: 'Laden', icon: 'upload', onClick: handlers.loadZip },
+    {
+      label: 'Sicherungsstände',
+      icon: 'history',
+      onClick: handlers.openSnapshots,
+      disabled: !hasProject,
+    },
+    {
+      label: 'Server',
+      icon: 'server',
+      onClick: handlers.openServer,
+      disabled: !hasProject,
+    },
+  ];
+
+  /* Teilen nur anbieten, wenn der Server wirklich verknüpft ist. */
+  if (project?.server && isLinkedServer(project.server)) {
+    projectItems.push({
+      label: 'Teilen',
+      icon: 'share',
+      onClick: handlers.openShare,
+    });
+  }
+
   const groups: MenuGroup[] = [
     {
       label: 'Projekt',
       icon: 'folder',
-      items: [
-        { label: 'Neues Projekt', icon: 'folder-plus', onClick: handlers.newProject },
-        {
-          label: 'Meine Projekte',
-          icon: 'folder',
-          onClick: handlers.openProjects,
-        },
-        {
-          label: 'Speichern',
-          icon: 'download',
-          onClick: handlers.saveZip,
-          disabled: !hasProject,
-        },
-        { label: 'Laden', icon: 'upload', onClick: handlers.loadZip },
-        {
-          label: 'Sicherungsstände',
-          icon: 'history',
-          onClick: handlers.openSnapshots,
-          disabled: !hasProject,
-        },
-        {
-          label: 'Server',
-          icon: 'server',
-          onClick: handlers.openServer,
-          disabled: !hasProject,
-        },
-      ],
+      items: projectItems,
     },
   ];
 

@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   filesToRemove,
+  filesToUpload,
   parentDirsWithin,
+  pollOnce,
   testServerConnection,
 } from './server-sync';
+import { state } from './app-state';
+import { saveServerToken } from '../core/seafile';
 import type { SeafileConnection } from '../domain/server';
+import type { Project } from '../domain/types';
 
 const CONN: SeafileConnection = {
   url: 'https://host.tld',
@@ -49,6 +54,74 @@ function mockFetch(
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('filesToUpload', () => {
+  it('lädt nur neue oder geänderte Dateien hoch', () => {
+    expect(
+      filesToUpload(
+        { a: '1', b: '2', alt: '9' },
+        { a: '1', b: '3', c: '4' },
+      ),
+    ).toEqual(['b', 'c']);
+  });
+
+  it('lädt alles hoch, wenn noch keine Hashes bekannt sind', () => {
+    expect(filesToUpload({}, { a: '1', b: '2' })).toEqual(['a', 'b']);
+  });
+});
+
+describe('pollOnce', () => {
+  it('fragt eine fehlende Sperrdatei nicht per GET an', async () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, value);
+      },
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      clear: () => store.clear(),
+      key: (index: number) => [...store.keys()][index] ?? null,
+      get length() {
+        return store.size;
+      },
+    });
+    vi.stubGlobal('document', { hidden: false });
+
+    const project: Project = {
+      schemaVersion: 1,
+      id: 'ABCD1234',
+      name: 'Testprojekt',
+      location: 'Ort',
+      description: '',
+      createdAt: '2026-02-01T10:00:00.000Z',
+      updatedAt: '2026-02-01T10:00:00.000Z',
+      tasks: [],
+      documents: [],
+      server: {
+        url: 'https://host.tld',
+        repoId: 'repo-1',
+        path: '/Baustelle',
+        linkedAt: '2026-02-01T10:00:00.000Z',
+      },
+    };
+    saveServerToken(project.server!, 'secret');
+    state.project = project;
+
+    const calls = mockFetch((url) => {
+      if (url === `${BASE}/`) return json({ name: 'Bibliothek' });
+      if (url === `${BASE}/dir/?p=%2FBaustelle`) return json([]);
+      throw new Error(`Unerwartete Anfrage: ${url}`);
+    });
+
+    await pollOnce();
+
+    expect(calls.some((call) => call.url.includes('locks.json'))).toBe(false);
+    expect(calls.some((call) => call.url.includes('/dir/'))).toBe(true);
+    state.project = null;
+  });
 });
 
 describe('filesToRemove', () => {

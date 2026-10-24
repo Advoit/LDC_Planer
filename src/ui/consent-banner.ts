@@ -74,7 +74,7 @@ export function showConsentNotice(): void {
         el('h2', { class: 'consent-title' }, ['Cookies & lokale Speicherung']),
       ]),
       el('p', { class: 'consent-intro' }, [
-        'Dieser Planer arbeitet standardmäßig vollständig offline. Es werden keine Cookies von Drittanbietern gesetzt und Sie werden nicht verfolgt. Erst wenn Sie unter „Projekt → Server“ eine Seafile-Bibliothek verknüpfen, werden Projekt und Sperrdatei an diesen Server übertragen. Alles andere bleibt lokal auf Ihrem Gerät.',
+        'Dieser Planer arbeitet standardmäßig vollständig offline. Es werden keine Cookies von Drittanbietern gesetzt und Sie werden nicht verfolgt. Erst wenn Sie unter „Projekt → Server“ eine Seafile-Bibliothek verknüpfen, werden Projekt und Sperrdatei an diesen Server übertragen; beim Teilen zusätzlich eine Freigabe-ZIP mit Zugangsdatei. Alles andere bleibt lokal auf Ihrem Gerät.',
       ]),
       categories,
       actions,

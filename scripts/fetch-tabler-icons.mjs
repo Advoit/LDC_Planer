@@ -51,6 +51,7 @@ const ICONS = {
   'shield-check': 'shield-check',
   'shield-lock': 'shield-lock',
   server: 'server',
+  share: 'share',
   'cloud-check': 'cloud-check',
   'cloud-exclamation': 'cloud-exclamation',
   'cloud-upload': 'cloud-upload',

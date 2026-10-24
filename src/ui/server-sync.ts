@@ -31,6 +31,7 @@ import {
   downloadFileAtPath,
   downloadTextAtPath,
   getDeviceId,
+  listDirectory,
   listFilesRecursive,
   readServerToken,
   saveServerToken,
@@ -39,6 +40,7 @@ import {
 } from '../core/seafile';
 import { getPreference, setPreference } from '../core/preferences';
 import { randomId } from '../core/id';
+import { sha256Hex } from '../core/hash';
 import { buildProjectFiles } from '../io/export';
 import { parseProjectFiles, parseProjectZip } from '../io/import';
 import type { Project, ProjectServer } from '../domain/types';
@@ -78,6 +80,7 @@ interface SyncContext {
 
 const LAST_SYNC_KEY = 'seafile.lastSync';
 const FILE_LIST_KEY = 'seafile.files';
+const FILE_HASHES_KEY = 'seafile.fileHashes';
 const AUTO_SYNC_DELAY = 3000;
 const POLL_INTERVAL = 20_000;
 const HEARTBEAT_INTERVAL = 60_000;
@@ -96,6 +99,9 @@ let pendingPull = false;
 let autoTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let pollInFlight = false;
+/* Solange keine Sperrdatei bekannt ist, wird der Ordner gelistet statt eine
+   fehlende Datei per GET anzufragen (vermeidet 404-Meldungen im Browser). */
+let lockFileKnown = false;
 const heartbeats = new Map<string, ReturnType<typeof setInterval>>();
 const heartbeatUsers = new Map<string, string>();
 
@@ -129,7 +135,8 @@ function writeLastSync(projectId: string, iso: string): void {
   setPreference(LAST_SYNC_KEY, map);
 }
 
-/* Zuletzt hochgeladene Dateien – nur für das Aufräumen verwaister Dateien. */
+/* Zuletzt hochgeladene Dateien mit Hash – nur für den Abgleich und das
+   Aufräumen verwaister Dateien. */
 
 function fileListKey(ctx: SyncContext): string {
   return `${ctx.conn.url.replace(/\/+$/, '')}|${ctx.conn.repoId}|${ctx.conn.path}|${ctx.project.id}`;
@@ -141,16 +148,50 @@ function readFileList(ctx: SyncContext): string[] {
   return Array.isArray(value) ? value.filter((path) => typeof path === 'string') : [];
 }
 
-function writeFileList(ctx: SyncContext, paths: string[]): void {
-  const map = { ...getPreference<Record<string, string[]>>(FILE_LIST_KEY, {}) };
-  map[fileListKey(ctx)] = paths;
-  setPreference(FILE_LIST_KEY, map);
+function readFileHashes(ctx: SyncContext): Record<string, string> {
+  const map = getPreference<Record<string, Record<string, string>>>(FILE_HASHES_KEY, {});
+  const value = map[fileListKey(ctx)];
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const out: Record<string, string> = {};
+    for (const [path, hash] of Object.entries(value)) {
+      if (typeof hash === 'string') out[path] = hash;
+    }
+    return out;
+  }
+  /* Einmalige Migration: alte Versionen speicherten nur Pfade. */
+  return Object.fromEntries(readFileList(ctx).map((path) => [path, '']));
+}
+
+function writeFileHashes(ctx: SyncContext, hashes: Record<string, string>): void {
+  const map = { ...getPreference<Record<string, Record<string, string>>>(FILE_HASHES_KEY, {}) };
+  map[fileListKey(ctx)] = hashes;
+  setPreference(FILE_HASHES_KEY, map);
+}
+
+/** Dateien, deren Inhalt sich gegenüber dem letzten Upload geändert hat. */
+export function filesToUpload(
+  previous: Record<string, string>,
+  next: Record<string, string>,
+): string[] {
+  return Object.keys(next).filter((path) => previous[path] !== next[path]);
 }
 
 /** Dateien, die nach dem Upload nicht mehr im Projekt vorkommen. */
 export function filesToRemove(previous: string[], next: string[]): string[] {
   const nextSet = new Set(next);
   return previous.filter((path) => !nextSet.has(path));
+}
+
+async function hashProjectFiles(
+  files: Record<string, Uint8Array>,
+): Promise<Record<string, string>> {
+  const hashes: Record<string, string> = {};
+  for (const [path, bytes] of Object.entries(files)) {
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    hashes[path] = await sha256Hex(copy.buffer);
+  }
+  return hashes;
 }
 
 /** Ordner einer Datei bis zum Projektordner (ohne diesen selbst). */
@@ -207,12 +248,23 @@ function context(): SyncContext | null {
 /* ── Sperrdatei ── */
 
 async function loadLockFile(ctx: SyncContext): Promise<LockFile> {
-  const bytes = await downloadFile(
-    ctx.conn,
-    ctx.token,
-    projectLockFileName(ctx.project.id),
-  );
-  if (!bytes) return emptyLockFile();
+  const name = projectLockFileName(ctx.project.id);
+  if (!lockFileKnown) {
+    /* Erst im Ordner nachsehen: Eine fehlende Sperrdatei ist normal und soll
+       keinen 404-Request (und keine Fehlermeldung im Browser) erzeugen. */
+    const entries = await listDirectory(ctx.conn, ctx.token, ctx.conn.path);
+    const exists = Boolean(
+      entries?.some((entry) => entry.type === 'file' && entry.name === name),
+    );
+    if (!exists) return emptyLockFile();
+    lockFileKnown = true;
+  }
+
+  const bytes = await downloadFile(ctx.conn, ctx.token, name);
+  if (!bytes) {
+    lockFileKnown = false;
+    return emptyLockFile();
+  }
   try {
     return normalizeLockFile(JSON.parse(new TextDecoder().decode(bytes)));
   } catch {
@@ -228,6 +280,7 @@ async function writeLockFile(ctx: SyncContext, file: LockFile): Promise<void> {
     JSON.stringify(file, null, 2),
     'application/json',
   );
+  lockFileKnown = true;
 }
 
 function setLocks(file: LockFile): void {
@@ -525,9 +578,9 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   ) as ArrayBuffer;
 }
 
-async function pullRemote(ctx: SyncContext): Promise<void> {
+async function pullRemote(ctx: SyncContext): Promise<boolean> {
   const project = state.project;
-  if (!project) return;
+  if (!project) return false;
 
   const projectFolder = joinServerPath(
     ctx.conn.path,
@@ -546,32 +599,40 @@ async function pullRemote(ctx: SyncContext): Promise<void> {
       });
     }
     remote = await parseProjectFiles(files);
-    if (remote) writeFileList(ctx, paths);
+    if (remote) writeFileHashes(ctx, await hashProjectFiles(Object.fromEntries(files)));
   }
 
-  /* Übergang: eine vorhandene Projekt-ZIP wird noch eingelesen. */
+  /* Übergang: eine vorhandene Projekt-ZIP wird noch eingelesen. Erst im
+     Zielordner nachsehen, damit ein neues Projekt keinen 404-GET erzeugt. */
+  let usedArchive = false;
   if (!remote) {
-    const bytes = await downloadFile(
-      ctx.conn,
-      ctx.token,
-      projectArchiveName(project.id),
+    const archiveName = projectArchiveName(project.id);
+    const baseEntries = await listDirectory(ctx.conn, ctx.token, ctx.conn.path);
+    const hasArchive = Boolean(
+      baseEntries?.some(
+        (entry) => entry.type === 'file' && entry.name === archiveName,
+      ),
     );
-    if (!bytes) return;
+    if (!hasArchive) return false;
+    const bytes = await downloadFile(ctx.conn, ctx.token, archiveName);
+    if (!bytes) return false;
     remote = await parseProjectZip(toArrayBuffer(bytes));
-    if (!remote) return;
+    if (!remote) return false;
+    usedArchive = true;
   }
 
   /* Während des Downloads kann das Projekt gewechselt haben. */
-  if (state.project?.id !== project.id) return;
+  if (state.project?.id !== project.id) return usedArchive;
 
   const lastSync = readLastSync(project.id);
-  if (lastSync && remote.updatedAt <= lastSync) return;
+  if (lastSync && remote.updatedAt <= lastSync) return usedArchive;
 
   const merged = await runMergeFlow(project, remote);
   state.project = touchProject(merged);
   await persist();
   render();
   showToast('Serverstand wurde zusammengeführt.', 'info');
+  return usedArchive;
 }
 
 async function uploadProject(ctx: SyncContext): Promise<void> {
@@ -579,32 +640,47 @@ async function uploadProject(ctx: SyncContext): Promise<void> {
   if (!project || project.id !== ctx.project.id) return;
 
   const files = buildProjectFiles(project, { includeServer: false });
-  const entries = Object.entries(files).map(([path, bytes]) => {
-    const copy = new Uint8Array(bytes.byteLength);
-    copy.set(bytes);
-    return { path, content: new Blob([copy]) };
-  });
-  /* Erst Bilder/Dokumente, dann task.json, zuletzt project.json – so verweist
-     keine JSON-Datei auf eine Datei, die noch nicht hochgeladen ist. */
-  const priority = (path: string): number => {
-    if (path.endsWith('/project.json')) return 2;
-    if (path.endsWith('/task.json')) return 1;
-    return 0;
-  };
-  entries.sort((a, b) => priority(a.path) - priority(b.path));
+  /* Hashes und Pfade einheitlich absolut speichern – so passen sie zu den
+     Pfaden, die beim Herunterladen vom Server entstehen. */
+  const absoluteFiles: Record<string, Uint8Array> = {};
+  for (const [path, bytes] of Object.entries(files)) {
+    absoluteFiles[joinServerPath(ctx.conn.path, path)] = bytes;
+  }
+  const hashes = await hashProjectFiles(absoluteFiles);
+  const previousHashes = readFileHashes(ctx);
+  const changedPaths = filesToUpload(previousHashes, hashes);
 
-  await uploadFiles(ctx.conn, ctx.token, entries, (done, total) => {
-    update({ detail: `Serverdateien werden hochgeladen (${done}/${total}) …` });
-  });
+  if (state.project?.id !== project.id) return;
 
-  const newPaths = Object.keys(files).map((path) =>
-    joinServerPath(ctx.conn.path, path),
-  );
+  if (changedPaths.length > 0) {
+    const entries = changedPaths.map((path) => {
+      const bytes = absoluteFiles[path];
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      return { path, content: new Blob([copy]) };
+    });
+    /* Erst Bilder/Dokumente, dann task.json, zuletzt project.json – so verweist
+       keine JSON-Datei auf eine Datei, die noch nicht hochgeladen ist. */
+    const priority = (path: string): number => {
+      if (path.endsWith('/project.json')) return 2;
+      if (path.endsWith('/task.json')) return 1;
+      return 0;
+    };
+    entries.sort((a, b) => priority(a.path) - priority(b.path));
+
+    await uploadFiles(ctx.conn, ctx.token, entries, (done, total) => {
+      update({ detail: `Serverdateien werden hochgeladen (${done}/${total}) …` });
+    });
+  } else {
+    update({ detail: 'Keine Änderungen zum Hochladen.' });
+  }
+
+  const newPaths = Object.keys(absoluteFiles);
   const projectPrefix = joinServerPath(
     ctx.conn.path,
     projectFolderName(ctx.project.id),
   );
-  const previous = readFileList(ctx);
+  const previous = Object.keys(previousHashes);
   const staleDirs = new Set<string>();
   let cleanupFailed = false;
   for (const oldPath of filesToRemove(previous, newPaths)) {
@@ -633,9 +709,9 @@ async function uploadProject(ctx: SyncContext): Promise<void> {
       /* Nicht kritisch – der Ordner ist evtl. noch nicht leer. */
     }
   }
-  writeFileList(
+  writeFileHashes(
     ctx,
-    cleanupFailed ? [...new Set([...previous, ...newPaths])] : newPaths,
+    cleanupFailed ? { ...previousHashes, ...hashes } : hashes,
   );
   writeLastSync(project.id, new Date().toISOString());
 }
@@ -684,13 +760,16 @@ async function runSync(opts: {
 
   try {
     await checkServer(ctx.conn, ctx.token);
-    if (opts.pull) await pullRemote(ctx);
+    const usedArchive = opts.pull ? await pullRemote(ctx) : false;
     await uploadProject(ctx);
-    /* Die alte ZIP-Sicherung ist nach erfolgreichem Upload überflüssig. */
-    try {
-      await deleteFile(ctx.conn, ctx.token, projectArchiveName(ctx.project.id));
-    } catch {
-      /* Nicht kritisch – die Einzeldateien sind bereits hochgeladen. */
+    /* Die alte ZIP-Sicherung nur entfernen, wenn sie tatsächlich gelesen
+       wurde – sonst entstünde bei jedem Abgleich ein unnötiger 404-Request. */
+    if (usedArchive) {
+      try {
+        await deleteFile(ctx.conn, ctx.token, projectArchiveName(ctx.project.id));
+      } catch {
+        /* Nicht kritisch – die Einzeldateien sind bereits hochgeladen. */
+      }
     }
     if (state.project?.id !== ctx.project.id) {
       return { ok: false, error: 'Projekt wurde gewechselt.' };
@@ -762,6 +841,7 @@ export async function startProjectSync(): Promise<void> {
     autoTimer = null;
   }
   currentLocks = {};
+  lockFileKnown = false;
   window.dispatchEvent(new CustomEvent('ldc:locks-changed'));
 
   const project = state.project;

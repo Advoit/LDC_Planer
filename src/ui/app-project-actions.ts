@@ -17,7 +17,9 @@ import { deleteProject, loadProject } from '../core/project-store';
 import { migrateProject } from '../core/migrate';
 import { touchProject } from '../domain/project';
 import { buildProjectZip, projectZipFileName } from '../io/export';
-import { parseProjectZip } from '../io/import';
+import { parseProjectZipDetailed } from '../io/import';
+import { applyServerAccess } from '../io/share';
+import type { ServerAccess } from '../io/share';
 import { withProgress } from './progress';
 import {
   activateProject,
@@ -112,13 +114,16 @@ export async function importProjectFile(file: File): Promise<void> {
   }
 
   let imported: Project | null = null;
+  let access: ServerAccess | null = null;
   let readFailed = false;
   try {
     /* FileReader-Fallback für ältere iOS-/Android-Browser (kein Blob.arrayBuffer). */
     const buffer = await readFileAsArrayBuffer(file);
-    imported = await withProgress('Projekt wird geladen …', async (report) =>
-      parseProjectZip(buffer, report),
+    const parsed = await withProgress('Projekt wird geladen …', async (report) =>
+      parseProjectZipDetailed(buffer, report),
     );
+    imported = parsed.project;
+    access = parsed.access;
   } catch {
     readFailed = true;
   }
@@ -132,6 +137,13 @@ export async function importProjectFile(file: File): Promise<void> {
     return;
   }
 
+  const applyAccess = (
+    project: Project,
+  ): { project: Project; applied: boolean } => {
+    if (!access) return { project, applied: false };
+    return applyServerAccess(project, access);
+  };
+
   if (!state.project) {
     /* Existiert bereits ein Projekt mit dieser ID, dessen Stand vorher sichern */
     const stored = state.summaries.some((s) => s.id === imported!.id)
@@ -143,8 +155,14 @@ export async function importProjectFile(file: File): Promise<void> {
         await createSnapshot(existing);
       }
     }
-    await activateProject(imported);
-    showToast('Projekt geladen.', 'success');
+    const applied = applyAccess(imported);
+    await activateProject(applied.project);
+    showToast(
+      applied.applied
+        ? 'Projekt geladen – Server-Zugang übernommen.'
+        : 'Projekt geladen.',
+      'success',
+    );
     return;
   }
 
@@ -153,16 +171,31 @@ export async function importProjectFile(file: File): Promise<void> {
   if (choice === 'cancel') return;
   if (choice === 'overwrite') {
     await createSnapshot(state.project);
-    await activateProject(imported);
-    showToast('Projekt überschrieben.', 'success');
+    const applied = applyAccess(imported);
+    await activateProject(applied.project);
+    showToast(
+      applied.applied
+        ? 'Projekt überschrieben – Server-Zugang übernommen.'
+        : 'Projekt überschrieben.',
+      'success',
+    );
     return;
   }
   if (choice === 'merge') {
     const merged = await runMergeFlow(state.project, imported);
     if (merged) {
+      /* Ein vorhandener lokaler Server bleibt beim Zusammenführen erhalten. */
+      const applied = merged.server
+        ? { project: merged, applied: false }
+        : applyAccess(merged);
       await createSnapshot(state.project);
-      await activateProject(merged);
-      showToast('Projekte zusammengeführt.', 'success');
+      await activateProject(applied.project);
+      showToast(
+        applied.applied
+          ? 'Projekte zusammengeführt – Server-Zugang übernommen.'
+          : 'Projekte zusammengeführt.',
+        'success',
+      );
     }
   }
 }

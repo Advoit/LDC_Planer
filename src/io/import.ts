@@ -7,6 +7,8 @@ import type { ExportedProject, ExportedTask, DocumentRef, ImageRef } from './exp
 import { migrateProject } from '../core/migrate';
 import { createUiYielder, reportProgress } from '../core/progress';
 import type { ProgressReporter } from '../core/progress';
+import { readServerAccessFromFiles } from './share';
+import type { ServerAccess } from './share';
 
 /**
  * Entpackt ein ZIP asynchron. Anders als `unzipSync` gibt fflate zwischen den
@@ -252,11 +254,17 @@ export async function parseProjectFiles(
   return project;
 }
 
-/** Entpackt eine Projekt-ZIP und liest sie ein. */
-export async function parseProjectZip(
+export interface ParsedProjectImport {
+  project: Project | null;
+  /** In der ZIP enthaltene Server-Zugangsdatei (beim Teilen erzeugt). */
+  access: ServerAccess | null;
+}
+
+/** Entpackt eine Projekt-ZIP, liest das Projekt und eine evtl. Zugangsdatei. */
+export async function parseProjectZipDetailed(
   buffer: ArrayBuffer,
   onProgress?: ProgressReporter,
-): Promise<Project | null> {
+): Promise<ParsedProjectImport> {
   const yieldUi = createUiYielder();
   reportProgress(onProgress, 'ZIP wird entpackt …');
   await yieldUi();
@@ -266,8 +274,19 @@ export async function parseProjectZip(
   try {
     unzipped = await unzipAsync(data);
   } catch {
-    return null;
+    return { project: null, access: null };
   }
 
-  return parseProjectFiles(new Map(Object.entries(unzipped)), onProgress);
+  const files = new Map(Object.entries(unzipped));
+  const access = readServerAccessFromFiles(files);
+  const project = await parseProjectFiles(files, onProgress);
+  return { project, access };
+}
+
+/** Entpackt eine Projekt-ZIP und liest sie ein. */
+export async function parseProjectZip(
+  buffer: ArrayBuffer,
+  onProgress?: ProgressReporter,
+): Promise<Project | null> {
+  return (await parseProjectZipDetailed(buffer, onProgress)).project;
 }

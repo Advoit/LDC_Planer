@@ -42,9 +42,11 @@ Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben e
 - **Seafile verknüpfen:** Bibliothekslink, Zielordner und API-Token unter **Projekt → Server** eintragen
 - **Einzeldateien statt ZIP:** Im Zielordner liegt `LDC-Projekt-<ID>/` mit `project.json`, `tasks/<ID>/task.json`, `images/` und `documents/` – Bilder und Dokumente bleiben einzeln editierbar
 - **Zielordner frei wählbar:** leer oder `/` = Hauptverzeichnis der Bibliothek
-- **Token bleibt lokal:** Jede Person trägt denselben Token einmalig auf ihrem Gerät ein – als persönlichen API-Token oder als Bibliotheks-Token (Bibliothek → Erweitert → API-Token, Rechte `rw`)
+- **Token bleibt lokal:** Jede Person trägt denselben Token einmalig auf ihrem Gerät ein – als persönlichen API-Token oder als Bibliotheks-Token (Bibliothek → Erweitert → API-Token, Rechte `rw`). Nur beim **Teilen** wird der Token in die Zugangsdatei geschrieben.
 - **Test:** schreibt, liest und löscht eine Testdatei auf dem Server
+- **Nur Änderungen:** Vor dem Upload wird jede Datei per SHA-256 mit dem letzten Stand verglichen. Unveränderte Bilder, Dokumente und JSON-Dateien werden nicht erneut übertragen.
 - **Zwei-Wege-Abgleich:** Verknüpfen lädt die Einzeldateien hoch, Änderungen gehen automatisch nach, beim Öffnen wird der Serverstand zusammengeführt
+- **Teilen:** Bei verknüpftem Server unter **Projekt → Teilen** eine Freigabe-ZIP mit Zugangsdatei erzeugen, auf dem Server ablegen und einen Seafile-Link erhalten. Wer die ZIP über **Projekt → Laden** öffnet, bekommt den Server-Zugang automatisch hinterlegt.
 - **Umstieg & Aufräumen:** Eine vorhandene Projekt-ZIP wird beim ersten Abgleich eingelesen und danach entfernt; nicht mehr verwendete Dateien werden nach dem Upload gelöscht
 - **Status-Icon oben rechts:** grün online, blau beim Sync, gelb Server offline, rot nicht verbunden, grau ohne Server – antippen zeigt Details
 - **Bearbeitungssperre:** Wer eine Aufgabe öffnet, hält sie für andere gesperrt (rotes Schloss, nur Ansicht); ohne Heartbeat läuft die Sperre nach 5 Minuten ab
@@ -98,7 +100,7 @@ Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben e
 - **Automatisch:** Jede Änderung wird lokal gespeichert, spätestens beim Tab-Wechsel oder Schließen.
 - **Als Datei:** **Projekt → Speichern** schreibt eine ZIP-Sicherung mit allen Bildern und Dokumenten.
 - **Speicherplatz:** Die App fordert dauerhaften Speicher an und warnt, wenn es knapp wird – dann hilft eine ZIP-Sicherung.
-- **Optionaler Server:** Ohne verknüpfte Seafile-Bibliothek gibt es kein Backend – nichts verlässt das Gerät. Mit **Projekt → Server** werden die Projektdateien (JSON, Bilder und Dokumente) sowie die Sperrdatei an den angegebenen Seafile-Server übertragen; der API-Token bleibt lokal.
+- **Optionaler Server:** Ohne verknüpfte Seafile-Bibliothek gibt es kein Backend – nichts verlässt das Gerät. Mit **Projekt → Server** werden die Projektdateien (JSON, Bilder und Dokumente) sowie die Sperrdatei an den angegebenen Seafile-Server übertragen; der API-Token bleibt lokal. Beim **Teilen** wird zusätzlich eine Freigabe-ZIP mit Zugangsdatei auf den Server gelegt.
 
 <details>
 <summary><strong>Aufbau der Projektdatei</strong></summary>
@@ -115,7 +117,7 @@ LDC-Projekt-<PROJEKT-ID>/
         └── documents/        # Aufgaben-Dokumente
 ```
 
-Auf dem Server liegt dieselbe Struktur **entpackt** – eine ZIP entsteht nur bei **Projekt → Speichern**. Bilder und Dokumente werden per **SHA-256-Hash** dedupliziert – beim Zusammenführen werden identische Dateien übersprungen, unterschiedliche angehängt. Ältere Sicherungen (`.ldcproj`) bleiben ladbar.
+Auf dem Server liegt dieselbe Struktur **entpackt** – eine ZIP entsteht bei **Projekt → Speichern** und beim **Teilen**. Bilder und Dokumente werden per **SHA-256-Hash** dedupliziert – beim Zusammenführen werden identische Dateien übersprungen, unterschiedliche angehängt. Eine Freigabe-ZIP enthält zusätzlich `LDC-Zugang-<ID>.json` mit Serveradresse, Bibliothek, Zielordner und API-Token. Ältere Sicherungen (`.ldcproj`) bleiben ladbar.
 
 </details>
 
@@ -130,6 +132,7 @@ Der Planer arbeitet standardmäßig offline und ohne Backend. Es gibt **keine Co
 | **Unbedingt erforderlich** | App-Shell für die Offline-Nutzung | Service-Worker-Cache |
 | **Nur bei Server-Verknüpfung** | Projektdateien (JSON, Bilder, Dokumente) und Sperrdatei | Seafile-Server (vom Nutzer angegeben) |
 | **Nur bei Server-Verknüpfung** | API-Token | localStorage |
+| **Nur beim Teilen** | Freigabe-ZIP mit Zugangsdatei (enthält den API-Token) | Seafile-Server (vom Nutzer angegeben) |
 
 Rechtsgrundlage ist § 25 Abs. 2 TDDDG (unbedingt erforderliche Speicherung). Beim ersten Start erscheint ein **einmaliger Hinweis**, der darüber informiert und die Entscheidung samt Zeitstempel festhält. Er lässt sich jederzeit über **Einstellungen → Info** erneut öffnen. Kommen später optionale Kategorien (z. B. Statistik) hinzu, erscheinen automatisch Zustimmungsschalter sowie „Alle akzeptieren“ und „Nur notwendige“ mit gleicher Gewichtung.
 
