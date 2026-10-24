@@ -2,11 +2,11 @@
 
 # LDC Planer
 
-**Bau- und Sanierungsprojekte planen, abarbeiten und dokumentieren – offline, ohne Konto, ohne Server.**
+**Bau- und Sanierungsprojekte planen, abarbeiten und dokumentieren – offline, ohne Konto, optional mit Seafile-Abgleich.**
 
 ### ▶︎ [App öffnen](https://advoit.github.io/LDC_Planer/)
 
-<img src="https://img.shields.io/badge/offline--f%C3%A4hig-nach%20dem%20ersten%20Laden-34C759?style=flat-square" alt="offline-fähig"> <img src="https://img.shields.io/badge/Daten-bleiben%20auf%20dem%20Ger%C3%A4t-007AFF?style=flat-square" alt="Daten bleiben lokal"> <img src="https://img.shields.io/badge/mobil%20%26%20Desktop-responsiv-1D1D1F?style=flat-square" alt="mobil und Desktop"> <img src="https://img.shields.io/badge/installierbar-als%20App-FF9500?style=flat-square" alt="installierbar">
+<img src="https://img.shields.io/badge/offline--f%C3%A4hig-nach%20dem%20ersten%20Laden-34C759?style=flat-square" alt="offline-fähig"> <img src="https://img.shields.io/badge/Daten-standardm%C3%A4%C3%9Fig%20lokal-007AFF?style=flat-square" alt="Daten bleiben standardmäßig lokal"> <img src="https://img.shields.io/badge/mobil%20%26%20Desktop-responsiv-1D1D1F?style=flat-square" alt="mobil und Desktop"> <img src="https://img.shields.io/badge/installierbar-als%20App-FF9500?style=flat-square" alt="installierbar">
 
 </div>
 
@@ -16,7 +16,7 @@
 
 Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben erfassen, Fotos und Pläne anhängen, den Bearbeitungsstand nachhalten und am Ende Bericht, Materialliste oder Instandsetzungsreport ausgeben.
 
-- **Alles bleibt lokal.** Keine Anmeldung, kein Server, keine Datenübertragung – die Projekte liegen im Browser-Speicher des Geräts.
+- **Standardmäßig lokal.** Keine Anmeldung, kein Zwang zu einem Server – die Projekte liegen im Browser-Speicher des Geräts. Wer möchte, verknüpft ein Projekt optional mit einer Seafile-Bibliothek.
 - **Auch ohne Netz.** Einmal geladen, funktioniert die App vollständig offline. Am Handy lässt sie sich wie eine normale App installieren.
 - **Sicherbar.** Jedes Projekt lässt sich als ZIP-Datei sichern, wieder laden, zusammenführen oder überschreiben.
 
@@ -37,6 +37,15 @@ Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben e
 - Material mit Vorschlägen aus früheren Aufgaben (Artikel **und** zuletzt verwendete Einheit)
 - Geplanter Arbeitsaufwand (hh:mm) und Personalbedarf
 - **Duplizieren** für ähnliche Aufgaben – Material und Bilder kommen mit, der Status startet neu
+
+**☁️ Server & Abgleich (optional)**
+- **Seafile verknüpfen:** Bibliothekslink und API-Token unter **Projekt → Server** eintragen
+- **Token bleibt lokal:** Jede Person trägt denselben Bibliotheks-Token einmalig auf ihrem Gerät ein
+- **Test:** schreibt, liest und löscht eine Testdatei auf dem Server
+- **Zwei-Wege-Abgleich:** Verknüpfen lädt die Projekt-ZIP hoch, Änderungen gehen automatisch nach, beim Öffnen wird der Serverstand zusammengeführt
+- **Status-Icon oben rechts:** grün online, blau beim Sync, gelb Server offline, rot nicht verbunden, grau ohne Server – antippen zeigt Details
+- **Bearbeitungssperre:** Wer eine Aufgabe öffnet, hält sie für andere gesperrt (rotes Schloss, nur Ansicht); ohne Heartbeat läuft die Sperre nach 5 Minuten ab
+- Voraussetzung: Seafile-Server mit CORS-Freigabe für `/api2`, `/api/v2.1`, `/upload-api` und `/seafhttp`
 
 **✅ Status & Übersicht**
 - Statusfluss **Offen → Hinweis → Behoben** mit Pflichtfeldern („Bearbeitet von“, „Bearbeitet am“, Hinweistext)
@@ -86,7 +95,7 @@ Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben e
 - **Automatisch:** Jede Änderung wird lokal gespeichert, spätestens beim Tab-Wechsel oder Schließen.
 - **Als Datei:** **Projekt → Speichern** schreibt eine ZIP-Sicherung mit allen Bildern und Dokumenten.
 - **Speicherplatz:** Die App fordert dauerhaften Speicher an und warnt, wenn es knapp wird – dann hilft eine ZIP-Sicherung.
-- **Keine Cloud:** Es gibt kein Backend. Nichts verlässt das Gerät, es sei denn, Sie geben eine Datei selbst weiter.
+- **Optionaler Server:** Ohne verknüpfte Seafile-Bibliothek gibt es kein Backend – nichts verlässt das Gerät. Mit **Projekt → Server** werden Projekt-ZIP und Sperrdatei an den angegebenen Seafile-Server übertragen; der API-Token bleibt lokal.
 
 <details>
 <summary><strong>Aufbau der Projektdatei</strong></summary>
@@ -109,13 +118,15 @@ Bilder und Dokumente werden per **SHA-256-Hash** dedupliziert – beim Zusammenf
 
 ## Datenschutz & Cookies
 
-Der Planer arbeitet vollständig offline und ohne Backend. Deshalb ist auch kein klassischer Consent-Dialog nötig – es gibt **keine Cookies von Drittanbietern, kein Tracking und keine Datenübertragung**. Gespeichert wird ausschließlich, was für die Funktion erforderlich ist, und zwar lokal auf dem Gerät:
+Der Planer arbeitet standardmäßig offline und ohne Backend. Es gibt **keine Cookies von Drittanbietern und kein Tracking**. Daten werden nur übertragen, wenn Sie selbst eine Seafile-Bibliothek verknüpfen. Gespeichert wird ausschließlich, was für die Funktion erforderlich ist:
 
 | Kategorie | Zweck | Ort |
 | --- | --- | --- |
 | **Unbedingt erforderlich** (nicht abwählbar) | Projekte, Bilder und Dokumente | IndexedDB |
 | **Unbedingt erforderlich** | Einstellungen (Tag-/Nachtmodus, Ansicht/Filter, letzte Person) | localStorage |
 | **Unbedingt erforderlich** | App-Shell für die Offline-Nutzung | Service-Worker-Cache |
+| **Nur bei Server-Verknüpfung** | Projekt-ZIP und Sperrdatei | Seafile-Server (vom Nutzer angegeben) |
+| **Nur bei Server-Verknüpfung** | API-Token | localStorage |
 
 Rechtsgrundlage ist § 25 Abs. 2 TDDDG (unbedingt erforderliche Speicherung). Beim ersten Start erscheint ein **einmaliger Hinweis**, der darüber informiert und die Entscheidung samt Zeitstempel festhält. Er lässt sich jederzeit über **Einstellungen → Info** erneut öffnen. Kommen später optionale Kategorien (z. B. Statistik) hinzu, erscheinen automatisch Zustimmungsschalter sowie „Alle akzeptieren“ und „Nur notwendige“ mit gleicher Gewichtung.
 

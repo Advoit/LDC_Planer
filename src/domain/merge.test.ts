@@ -159,6 +159,45 @@ describe('mergeProjects', () => {
     expect(result.merged.tasks[0].projectId).toBe('AAAA1111');
   });
 
+  it('übernimmt Löschungen des Servers und entfernt die Aufgabe lokal', async () => {
+    const local = makeProject('AAAA1111');
+    local.tasks = [makeTask('T1', 'Gelöscht')];
+    const imported = makeProject('AAAA1111');
+    imported.deletedTasks = [{ id: 'T1', deletedAt: '2026-01-02T00:00:00.000Z' }];
+
+    const result = await mergeProjects(local, imported, () => 'local');
+    expect(result.merged.tasks).toHaveLength(0);
+    expect(result.merged.deletedTasks).toEqual([
+      { id: 'T1', deletedAt: '2026-01-02T00:00:00.000Z' },
+    ]);
+  });
+
+  it('holt lokal gelöschte Aufgaben nicht zurück', async () => {
+    const local = makeProject('AAAA1111');
+    local.deletedTasks = [{ id: 'T1', deletedAt: '2026-01-02T00:00:00.000Z' }];
+    const imported = makeProject('AAAA1111');
+    imported.tasks = [makeTask('T1', 'Noch auf dem Server')];
+
+    const result = await mergeProjects(local, imported, () => 'local');
+    expect(result.merged.tasks).toHaveLength(0);
+    expect(result.merged.deletedTasks?.map((ref) => ref.id)).toEqual(['T1']);
+  });
+
+  it('behält eine nach der Löschung bearbeitete Aufgabe', async () => {
+    const local = makeProject('AAAA1111');
+    local.tasks = [
+      makeTask('T1', 'Nach Löschung bearbeitet', {
+        updatedAt: '2026-01-03T00:00:00.000Z',
+      }),
+    ];
+    const imported = makeProject('AAAA1111');
+    imported.deletedTasks = [{ id: 'T1', deletedAt: '2026-01-02T00:00:00.000Z' }];
+
+    const result = await mergeProjects(local, imported, () => 'local');
+    expect(result.merged.tasks.map((t) => t.id)).toEqual(['T1']);
+    expect(result.merged.deletedTasks).toEqual([]);
+  });
+
   it('führt Nachher-Dokumente per Hash zusammen', async () => {
     const makeDoc = (id: string, hash: string) => ({
       id,

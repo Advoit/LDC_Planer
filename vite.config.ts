@@ -12,7 +12,7 @@ export default defineConfig({
         name: 'LDC Planer',
         short_name: 'LDC Planer',
         description:
-          'Offline-first PWA zum Planen und Ausführen von Projekten – lokal, ohne Server.',
+          'Offline-first PWA zum Planen und Ausführen von Projekten – lokal oder optional mit Seafile-Abgleich.',
         theme_color: '#007AFF',
         background_color: '#F5F5F7',
         display: 'standalone',

@@ -2,7 +2,15 @@
 
 import { strToU8, zipSync } from 'fflate';
 import { exportBaseName } from '../core/file-name';
-import type { Project, ProjectDocument, ReportCover, Task, TaskImage } from '../domain/types';
+import type {
+  DeletedTaskRef,
+  Project,
+  ProjectDocument,
+  ProjectServer,
+  ReportCover,
+  Task,
+  TaskImage,
+} from '../domain/types';
 
 const MIME_EXT: Readonly<Record<string, string>> = {
   'image/png': '.png',
@@ -74,6 +82,8 @@ export interface ExportedProject {
   updatedAt: string;
   documents: DocumentRef[];
   reportCover?: ReportCover; // Deckblatt-Einstellungen des Instandsetzungsreports
+  server?: ProjectServer; // Seafile-Verknüpfung (ohne Token)
+  deletedTasks?: DeletedTaskRef[]; // Löschvermerke für den Abgleich
 }
 
 export function dataUrlToBytes(dataUrl: string): Uint8Array {
@@ -141,6 +151,10 @@ export function buildProjectZip(project: Project): Blob {
     ),
     /* Nur mitgeben, wenn gesetzt – alte Sicherungen bleiben unverändert */
     ...(project.reportCover ? { reportCover: project.reportCover } : {}),
+    ...(project.server ? { server: project.server } : {}),
+    ...(project.deletedTasks && project.deletedTasks.length > 0
+      ? { deletedTasks: project.deletedTasks }
+      : {}),
   };
   files[`${root}/project.json`] = strToU8(
     JSON.stringify(exportedProject, null, 2),

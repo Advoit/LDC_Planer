@@ -96,6 +96,8 @@ export async function persist(): Promise<void> {
 
 export function schedulePersist(): void {
   dirty = true;
+  /* Der Server-Sync hört mit: nach einer Änderung wird gebündelt hochgeladen. */
+  window.dispatchEvent(new CustomEvent('ldc:project-changed'));
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
     saveTimeout = null;
@@ -135,6 +137,7 @@ export async function activateProject(next: Project): Promise<void> {
   await persist();
   await refreshSummaries();
   render();
+  window.dispatchEvent(new CustomEvent('ldc:project-activated'));
 }
 
 /** Schließt das geöffnete Projekt (z. B. nach dem Löschen). */
@@ -144,6 +147,7 @@ export async function closeProject(): Promise<void> {
   await setActiveProjectId(null);
   await refreshSummaries();
   render();
+  window.dispatchEvent(new CustomEvent('ldc:project-activated'));
 }
 
 /** Beim Start: alter Einzel-Projekt-Speicher, Projektliste und aktives Projekt laden. */

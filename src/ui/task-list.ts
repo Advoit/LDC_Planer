@@ -7,6 +7,8 @@ import { defaultTaskFilter, filterTasks } from '../domain/task-filter';
 import type { TaskFilter, TaskSortKey } from '../domain/task-filter';
 import { getPreference, setPreference } from '../core/preferences';
 import { createBulkBar } from './task-bulk-bar';
+import { getTaskLockHolder, isTaskLockedByOther } from './server-sync';
+import type { TaskLockEntry } from '../domain/server';
 
 export interface TaskListOptions {
   project: Project;
@@ -268,10 +270,14 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
 
     /* Nuggets (Typ-/Status-Badges) stehen unter dem Aufgabentext, damit die
        Überschrift auf schmalen Bildschirmen nicht gequetscht wird. */
+    const lock = getTaskLockHolder(task.id);
+    const badges = el('div', { class: 'task-badges' }, [typBadge, statusBadge]);
+    if (lock) badges.prepend(buildLockBadge(lock));
+
     const info = el('div', { class: 'task-info' }, [
       el('span', { class: 'task-name' }, [task.name]),
       el('p', { class: 'task-desc-clamp' }, [task.description]),
-      el('div', { class: 'task-badges' }, [typBadge, statusBadge]),
+      badges,
       el('div', { class: 'task-meta' }, [
         task.art ? metaItem('tag', task.art) : el('span'),
         task.position ? metaItem('map-pin', task.position) : el('span'),
@@ -302,13 +308,20 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
       row.appendChild(
         iconButton('copy', 'Aufgabe duplizieren', () => opts.onDuplicateTask(task.id)),
       );
-      row.appendChild(
-        iconButton('pencil', 'Aufgabe bearbeiten', () => opts.onEditTask(task.id)),
+      const editButton = iconButton('pencil', 'Aufgabe bearbeiten', () =>
+        opts.onEditTask(task.id),
       );
+      editButton.dataset.edit = 'true';
+      /* Gesperrte Aufgaben dürfen nur angesehen werden. */
+      editButton.hidden = Boolean(lock);
+      row.appendChild(editButton);
     }
+
+    if (lock) row.classList.add('locked');
 
     row.addEventListener('click', () => {
       if (selectionMode) toggleSelection(task.id);
+      else if (isTaskLockedByOther(task.id)) opts.onOpenTask(task.id);
       else if (opts.editMode) opts.onEditTask(task.id);
       else opts.onOpenTask(task.id);
     });
@@ -318,6 +331,45 @@ export function renderTaskList(container: HTMLElement, opts: TaskListOptions): v
 
   renderList();
 }
+
+/** Rotes Schloss: Aufgabe wird gerade von jemand anderem bearbeitet. */
+function buildLockBadge(holder: TaskLockEntry): HTMLElement {
+  const title = `Wird bearbeitet von ${holder.user} – nur Ansicht`;
+  return el(
+    'span',
+    { class: 'task-lock', title, 'aria-label': title },
+    [icon('shield-lock')],
+  );
+}
+
+/** Aktualisiert die Schlösser in der Liste, ohne Filter/Fokus zu verlieren. */
+function refreshLockBadges(): void {
+  const rows = document.querySelectorAll<HTMLElement>('.task-row[data-task-id]');
+  for (const row of rows) {
+    const taskId = row.dataset.taskId;
+    if (!taskId) continue;
+    const holder = getTaskLockHolder(taskId);
+    const badges = row.querySelector<HTMLElement>('.task-badges');
+    const existing = badges?.querySelector<HTMLElement>('.task-lock') ?? null;
+
+    if (holder && badges) {
+      if (existing) {
+        existing.title = `Wird bearbeitet von ${holder.user} – nur Ansicht`;
+      } else {
+        badges.prepend(buildLockBadge(holder));
+      }
+      row.classList.add('locked');
+    } else {
+      existing?.remove();
+      row.classList.remove('locked');
+    }
+
+    const editButton = row.querySelector<HTMLElement>('[data-edit="true"]');
+    if (editButton) editButton.hidden = Boolean(holder);
+  }
+}
+
+window.addEventListener('ldc:locks-changed', refreshLockBadges);
 
 /** Ein Meta-Eintrag der Aufgabenzeile: Tabler-Icon plus Text. */
 function metaItem(iconName: string, text: string): HTMLElement {

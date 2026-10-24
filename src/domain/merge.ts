@@ -1,6 +1,12 @@
 /* ── Projekt-Zusammenführung ── */
 
-import type { Project, ProjectDocument, Task, TaskImage } from './types';
+import type {
+  DeletedTaskRef,
+  Project,
+  ProjectDocument,
+  Task,
+  TaskImage,
+} from './types';
 
 /* ── Typen ── */
 
@@ -70,12 +76,21 @@ export async function mergeProjects(
     }
   }
 
+  /* Löschvermerke beider Seiten zusammenführen: eine Löschung darf nicht
+     dadurch zurückkommen, dass ein anderes Gerät die Aufgabe noch hat. */
+  const withDeletions = applyDeletions(
+    mergedTasks,
+    local.deletedTasks,
+    imported.deletedTasks,
+  );
+
   const merged: Project = {
     ...local,
     /* Deckblatt-Einstellungen: lokal bevorzugt, sonst die importierten */
     reportCover: local.reportCover ?? imported.reportCover,
     documents: mergeDocumentLists(local.documents, imported.documents),
-    tasks: mergedTasks,
+    tasks: withDeletions.tasks,
+    deletedTasks: withDeletions.deletedTasks,
     updatedAt: now,
   };
 
@@ -84,6 +99,44 @@ export async function mergeProjects(
     conflicts: conflictCount,
     added: addedCount,
     sameId,
+  };
+}
+
+/* ── Löschvermerke ── */
+
+function applyDeletions(
+  tasks: Task[],
+  localDeleted: DeletedTaskRef[] | undefined,
+  importedDeleted: DeletedTaskRef[] | undefined,
+): { tasks: Task[]; deletedTasks: DeletedTaskRef[] } {
+  const tombstones = new Map<string, string>();
+  for (const ref of [...(localDeleted ?? []), ...(importedDeleted ?? [])]) {
+    const known = tombstones.get(ref.id);
+    if (!known || ref.deletedAt > known) tombstones.set(ref.id, ref.deletedAt);
+  }
+
+  const kept: Task[] = [];
+  for (const task of tasks) {
+    const deletedAt = tombstones.get(task.id);
+    if (!deletedAt) {
+      kept.push(task);
+      continue;
+    }
+    /* Nach der Löschung noch bearbeitet? Dann gilt die Bearbeitung. */
+    if (task.updatedAt > deletedAt) {
+      tombstones.delete(task.id);
+      kept.push(task);
+      continue;
+    }
+    /* Aufgabe bleibt gelöscht. */
+  }
+
+  return {
+    tasks: kept,
+    deletedTasks: [...tombstones.entries()].map(([id, deletedAt]) => ({
+      id,
+      deletedAt,
+    })),
   };
 }
 

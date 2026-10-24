@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Offline-first PWA zum Planen und Ausführen von Projekten – lokal, ohne Server.",
+  "description": "Offline-first PWA zum Planen und Ausführen von Projekten – lokal oder optional mit Seafile-Abgleich.",
   "scripts": {
     "dev": "vite",
     "icons": "node scripts/generate-icons.mjs",

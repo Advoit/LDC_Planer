@@ -87,6 +87,15 @@ async function makeProject(): Promise<Project> {
       efkName: 'Max Mustermann',
       termin: '2026-08-30',
     },
+    server: {
+      url: 'https://cloud.example.com',
+      repoId: 'repo-1',
+      path: '/Baustelle',
+      linkedAt: '2026-02-01T11:00:00.000Z',
+    },
+    deletedTasks: [
+      { id: 'TASK-OLD', deletedAt: '2026-02-01T12:00:00.000Z' },
+    ],
   };
 }
 
@@ -133,6 +142,9 @@ describe('Export/Import-Roundtrip', () => {
     expect(imported!.documents[0].name).toBe('Genehmigung.pdf');
     /* Deckblatt-Einstellungen des Instandsetzungsreports gehen mit der Sicherung */
     expect(imported!.reportCover).toEqual(project.reportCover);
+    /* Seafile-Verknüpfung (ohne Token) und Löschvermerke bleiben erhalten */
+    expect(imported!.server).toEqual(project.server);
+    expect(imported!.deletedTasks).toEqual(project.deletedTasks);
   });
 
   it('übersteht den ZIP-Zyklus auch ohne Deckblatt-Einstellungen (alte Sicherungen)', async () => {

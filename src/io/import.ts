@@ -256,6 +256,8 @@ export async function parseProjectZip(
     tasks,
     documents,
     reportCover: exportedProject.reportCover,
+    server: exportedProject.server,
+    deletedTasks: exportedProject.deletedTasks,
   });
 
   return project;

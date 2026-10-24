@@ -1,6 +1,6 @@
 /* ── Aufgaben-Detail: Übersicht, Schnellstatus & Status-Änderung ── */
 
-import { el, downloadBlob, pdfBlob } from './dom';
+import { el, icon, downloadBlob, pdfBlob } from './dom';
 import { openModal } from './modal';
 import { showToast } from './toast';
 import { withProgress } from './progress';
@@ -18,6 +18,10 @@ export function openTaskDetail(opts: {
   taskId: string;
   onChanged: (updatedTask: Task) => void;
   onDuplicate?: (task: Task) => void;
+  /** Nur Ansicht – z. B. weil eine andere Person die Aufgabe bearbeitet. */
+  readOnly?: boolean;
+  lockHolder?: string;
+  onClose?: () => void;
 }): void {
   const found = opts.project.tasks.find((t) => t.id === opts.taskId);
   if (!found) return;
@@ -38,6 +42,21 @@ export function openTaskDetail(opts: {
   });
 
   const body = el('div', { class: 'task-detail' });
+
+  if (opts.readOnly) {
+    body.classList.add('read-only');
+    body.appendChild(
+      el('div', { class: 'lock-banner' }, [
+        icon('shield-lock'),
+        el('div', {}, [
+          el('strong', {}, ['Nur Ansicht']),
+          el('span', {}, [
+            ` ${opts.lockHolder ?? 'Eine andere Person'} bearbeitet diese Aufgabe gerade. Sie können alles ansehen, aber nichts ändern.`,
+          ]),
+        ]),
+      ]),
+    );
+  }
 
   /* ── Erstellungsfelder (nur lesbar) ── */
   body.appendChild(buildTaskOverview(task));
@@ -132,6 +151,17 @@ export function openTaskDetail(opts: {
 
   body.appendChild(statusSection);
 
+  if (opts.readOnly) {
+    for (const control of body.querySelectorAll<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >('input, textarea, select')) {
+      control.disabled = true;
+    }
+    for (const chip of body.querySelectorAll<HTMLButtonElement>('.quick-status .chip')) {
+      chip.disabled = true;
+    }
+  }
+
   /* Status-Felder aus dem Formular lesen */
   function readFields(): StatusFields {
     return {
@@ -146,6 +176,7 @@ export function openTaskDetail(opts: {
 
   /** Prüft, speichert und schließt die Detailansicht. */
   function saveStatus(fields: StatusFields): boolean {
+    if (opts.readOnly) return false;
     const err = validateStatusFields(fields, task.typ);
     if (err) {
       showToast(err, 'error');
@@ -176,23 +207,30 @@ export function openTaskDetail(opts: {
     label: string;
     kind: 'primary' | 'secondary' | 'danger';
     onClick: () => void | Promise<void>;
-  }[] = [
-    {
+  }[] = [];
+
+  if (opts.readOnly) {
+    actions.push({
+      label: 'Schließen',
+      kind: 'primary',
+      onClick: () => handle.close(),
+    });
+  } else {
+    actions.push({
       label: 'Abbrechen',
       kind: 'secondary',
       onClick: () => handle.close(),
-    },
-  ];
-
-  if (opts.onDuplicate) {
-    actions.push({
-      label: 'Duplizieren',
-      kind: 'secondary',
-      onClick: () => {
-        handle.close();
-        opts.onDuplicate!(task);
-      },
     });
+    if (opts.onDuplicate) {
+      actions.push({
+        label: 'Duplizieren',
+        kind: 'secondary',
+        onClick: () => {
+          handle.close();
+          opts.onDuplicate!(task);
+        },
+      });
+    }
   }
 
   actions.push({
@@ -212,13 +250,15 @@ export function openTaskDetail(opts: {
     },
   });
 
-  actions.push({
-    label: 'Speichern',
-    kind: 'primary',
-    onClick: () => {
-      saveStatus(readFields());
-    },
-  });
+  if (!opts.readOnly) {
+    actions.push({
+      label: 'Speichern',
+      kind: 'primary',
+      onClick: () => {
+        saveStatus(readFields());
+      },
+    });
+  }
 
   const handle = openModal({
     title: 'Aufgabe',
@@ -226,6 +266,7 @@ export function openTaskDetail(opts: {
     wide: true,
     dismissible: true,
     actions,
+    onClose: opts.onClose,
   });
 }
 

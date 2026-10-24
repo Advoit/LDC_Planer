@@ -109,6 +109,25 @@ export interface ReportCover {
   termin: string; // Ausführungstermin
 }
 
+/* ── Zusammenführung: gelöschte Aufgaben ── */
+
+/** Vermerk einer Löschung, damit sie beim Abgleich nicht zurückkommt. */
+export interface DeletedTaskRef {
+  id: string;
+  deletedAt: string; // ISO
+}
+
+/* ── Server-Anbindung (Seafile) ── */
+
+/** Verknüpfung eines Projekts mit einer Seafile-Bibliothek.
+ *  Der API-Token gehört bewusst nicht hierher – er bleibt auf dem Gerät. */
+export interface ProjectServer {
+  url: string; // Basis-URL der Seafile-Instanz
+  repoId: string; // Bibliotheks-ID
+  path: string; // Zielordner im Repo (mit führendem '/')
+  linkedAt: string; // ISO – leer, solange nur vorbereitet
+}
+
 /* ── Projekt ── */
 
 export interface Project {
@@ -122,4 +141,6 @@ export interface Project {
   tasks: Task[];
   documents: ProjectDocument[]; // Projektbezogene Unterlagen (Pläne etc.)
   reportCover?: ReportCover; // Deckblatt-Einstellungen des Instandsetzungsreports (gehen in die Sicherung)
+  server?: ProjectServer; // optionale Seafile-Verknüpfung (ohne Token)
+  deletedTasks?: DeletedTaskRef[]; // Löschvermerke für den Zwei-Wege-Abgleich
 }

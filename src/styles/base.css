@@ -64,8 +64,10 @@
   color-scheme: light dark;
 }
 
-/* ── Reset ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* ── Reset ── */*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* `hidden` muss auch gegen display-Regeln (z. B. .icon-btn) gewinnen. */
+[hidden] { display: none !important; }
 
 html {
   font-family: var(--font);

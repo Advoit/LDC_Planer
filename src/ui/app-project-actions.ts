@@ -198,12 +198,22 @@ export async function restoreTasks(tasks: Task[]): Promise<void> {
   const project = state.project;
   if (!project || tasks.length === 0) return;
   const existing = new Set(project.tasks.map((t) => t.id));
-  const toAdd = tasks.filter((t) => !existing.has(t.id));
+  /* updatedAt auf jetzt setzen: So gewinnt die Wiederherstellung auch gegen
+     einen älteren Löschvermerk eines anderen Geräts. */
+  const now = new Date().toISOString();
+  const toAdd = tasks
+    .filter((t) => !existing.has(t.id))
+    .map((t) => ({ ...t, updatedAt: now }));
   if (toAdd.length === 0) return;
 
+  const restoredIds = new Set(toAdd.map((t) => t.id));
   state.project = touchProject({
     ...project,
     tasks: [...project.tasks, ...toAdd],
+    /* Wiederherstellen macht den Löschvermerk rückgängig. */
+    deletedTasks: (project.deletedTasks ?? []).filter(
+      (ref) => !restoredIds.has(ref.id),
+    ),
   });
   const trash = await loadTrash(project.id);
   await saveTrash(

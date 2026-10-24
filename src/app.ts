@@ -9,6 +9,8 @@ import { initState, render, setRenderer, state, toggleEditMode } from './ui/app-
 import { withProgress } from './ui/progress';
 import { toggleTheme } from './core/theme';
 import { maybeShowConsentNotice, showConsentNotice } from './ui/consent-banner';
+import { openServerModal } from './ui/server-modal';
+import { installSyncEvents, startProjectSync } from './ui/server-sync';
 import {
   importProjectFile,
   loadZip,
@@ -45,6 +47,9 @@ export async function initApp(): Promise<void> {
   renderApp();
   /* Cookie-/Speicher-Hinweis nur beim ersten Besuch (bzw. nach Versionswechsel) */
   maybeShowConsentNotice();
+  /* Server-Anbindung: Ereignisse abonnieren und offenes Projekt abgleichen */
+  installSyncEvents();
+  void startProjectSync();
 }
 
 /* ── Rendering ── */
@@ -65,6 +70,7 @@ function toolbarOptions(): Parameters<typeof buildToolbar>[0] {
     saveZip: () => void saveZip(),
     loadZip: () => void loadZip(),
     openSnapshots: () => showSnapshots(),
+    openServer: () => openServerModal(),
     openTrash: () => showTrash(),
     openDocuments: () => void showProjectDocuments(),
     openInstandsetzungsreport: () => void showInstandsetzungsreport(),

@@ -3,6 +3,7 @@
 import { el } from './dom';
 import { createDropdown } from './dropdown';
 import { buildMobileNav } from './mobile-nav';
+import { buildSyncStatusButton } from './sync-status';
 import { resolvedTheme } from '../core/theme';
 import type { Project } from '../domain/types';
 
@@ -12,6 +13,7 @@ export interface ToolbarHandlers {
   saveZip: () => void;
   loadZip: () => void;
   openSnapshots: () => void;
+  openServer: () => void;
   openTrash: () => void;
   openDocuments: () => void;
   openInstandsetzungsreport: () => void;
@@ -74,6 +76,12 @@ function menuGroups(opts: ToolbarOptions): MenuGroup[] {
           label: 'Sicherungsstände',
           icon: 'history',
           onClick: handlers.openSnapshots,
+          disabled: !hasProject,
+        },
+        {
+          label: 'Server',
+          icon: 'server',
+          onClick: handlers.openServer,
           disabled: !hasProject,
         },
       ],
@@ -187,6 +195,7 @@ export function buildToolbar(opts: ToolbarOptions): HTMLElement {
     );
   }
   bar.appendChild(actions);
+  if (opts.project) bar.appendChild(buildSyncStatusButton());
   return bar;
 }
 

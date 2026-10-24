@@ -2,10 +2,11 @@
  *
  * Der Planer nutzt ausschließlich unbedingt erforderliche lokale Speicherung
  * (IndexedDB, localStorage, Service-Worker-Cache). Es gibt keine Cookies von
- * Drittanbietern, kein Tracking und keine Übertragung an einen Server. Nach
- * § 25 Abs. 2 TDDDG ist für rein notwendige Speicherung keine Einwilligung
- * nötig – der Hinweis informiert darüber und hält die Entscheidung nachweisbar
- * fest (Art. 7 DSGVO).
+ * Drittanbietern und kein Tracking. Nur wenn der Nutzer selbst eine
+ * Seafile-Bibliothek verknüpft, werden Projekt und Sperrdatei dorthin
+ * übertragen. Nach § 25 Abs. 2 TDDDG ist für rein notwendige Speicherung keine
+ * Einwilligung nötig – der Hinweis informiert darüber und hält die Entscheidung
+ * nachweisbar fest (Art. 7 DSGVO).
  *
  * Sobald optionale Kategorien (z. B. Statistik) hinzukommen, genügt hier ein
  * weiterer Eintrag ohne `required` – der Banner zeigt dann automatisch
@@ -28,7 +29,7 @@ export const CONSENT_CATEGORIES: readonly ConsentCategory[] = [
     label: 'Unbedingt erforderlich',
     required: true,
     description:
-      'Projekte, Bilder und Dokumente liegen ausschließlich auf diesem Gerät (IndexedDB). Einstellungen wie Tag-/Nachtmodus, Ansicht und Filter werden im localStorage gespeichert. Ein Service Worker legt die App für die Offline-Nutzung ab.',
+      'Projekte, Bilder und Dokumente liegen auf diesem Gerät (IndexedDB). Einstellungen wie Tag-/Nachtmodus, Ansicht und Filter sowie der API-Token einer verknüpften Seafile-Bibliothek werden im localStorage gespeichert. Ein Service Worker legt die App für die Offline-Nutzung ab.',
   },
 ];
 
@@ -36,7 +37,7 @@ export const OPTIONAL_CATEGORIES: readonly ConsentCategory[] =
   CONSENT_CATEGORIES.filter((category) => !category.required);
 
 /** Bei Änderungen an Kategorien/Zwecken erhöhen → Hinweis erscheint erneut. */
-export const CONSENT_VERSION = 1;
+export const CONSENT_VERSION = 2;
 
 const KEY = 'consent';
 

@@ -1571,3 +1571,181 @@ body.bulk-open .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
     justify-content: center;
   }
 }
+/* ═══════════════════ Seafile-Server & Sync-Status ═══════════════════ */
+
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sync-status:hover { background: var(--border); }
+.sync-status:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.sync-status .icon { width: 22px; height: 22px; }
+
+.sync-status.online { color: var(--success); }
+.sync-status.syncing { color: var(--blue); }
+.sync-status.offline { color: var(--warning); }
+.sync-status.error { color: var(--error); }
+.sync-status.unlinked { color: var(--text-tertiary); }
+
+.sync-status.syncing .icon { animation: cloud-pulse 1.4s ease-in-out infinite; }
+
+@keyframes cloud-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Rot: Aufgabe wird gerade von jemand anderem bearbeitet */
+.task-lock {
+  display: inline-flex;
+  align-items: center;
+  color: var(--error);
+}
+
+.task-lock .icon { width: 16px; height: 16px; }
+
+.task-row.locked { background: rgba(255, 59, 48, 0.035); }
+.task-row.locked:hover { background: rgba(255, 59, 48, 0.06); }
+
+.lock-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: var(--gap);
+  padding: 10px 12px;
+  border-left: 3px solid var(--error);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 59, 48, 0.1);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.lock-banner .icon {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--error);
+}
+
+.lock-banner strong { display: block; color: var(--error); font-size: 13px; }
+
+/* Nur Ansicht: Bearbeiten-Bedienelemente ausblenden, Werte lesbar halten */
+.task-detail.read-only .upload-actions,
+.task-detail.read-only .image-del-btn,
+.task-detail.read-only .thumb-label,
+.task-detail.read-only .document-upload > .btn,
+.task-detail.read-only .document-upload .drop-hint,
+.task-detail.read-only .document-del,
+.task-detail.read-only .image-upload .drop-hint { display: none !important; }
+
+.task-detail.read-only .input:disabled,
+.task-detail.read-only select.input:disabled {
+  opacity: 1;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+}
+
+.task-detail.read-only .chip:disabled { opacity: 0.7; }
+
+/* ── Server-Dialog ── */
+
+.server-form { display: flex; flex-direction: column; }
+.server-form .field-label:first-of-type { margin-top: 4px; }
+
+.server-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.server-status-line {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.server-feedback {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  background: var(--bg);
+}
+
+.server-feedback:empty { display: none; }
+.server-feedback.success { border-left: 3px solid var(--success); background: rgba(52, 199, 89, 0.12); color: var(--text); }
+.server-feedback.error { border-left: 3px solid var(--error); background: rgba(255, 59, 48, 0.1); color: var(--text); }
+.server-feedback.info { border-left: 3px solid var(--blue); }
+
+.server-check-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.server-step { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
+.server-step-mark { flex: 0 0 14px; font-weight: 700; }
+.server-step.ok .server-step-mark { color: var(--success); }
+.server-step.fail .server-step-mark { color: var(--error); }
+
+/* ── Serverstatus-Info ── */
+
+.sync-info { display: flex; flex-direction: column; gap: 10px; }
+
+.sync-info-head { display: flex; align-items: flex-start; gap: 12px; }
+
+.sync-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text-tertiary);
+}
+
+.sync-info-icon .icon { width: 26px; height: 26px; }
+.sync-info-icon.online { color: var(--success); }
+.sync-info-icon.syncing { color: var(--blue); }
+.sync-info-icon.offline { color: var(--warning); }
+.sync-info-icon.error { color: var(--error); }
+
+.sync-info-text strong { font-size: 15px; }
+.sync-info-text p {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.sync-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.sync-info-label { flex: 0 0 auto; color: var(--text-tertiary); }
+.sync-info-value { text-align: right; overflow-wrap: anywhere; }
+.sync-legend { margin-top: 4px; }

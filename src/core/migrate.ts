@@ -1,7 +1,13 @@
 /* ── Datenmigration – abwärtskompatibel zu alten App-Versionen ── */
 
 import type { Project, Task } from '../domain/types';
-import type { ProjectDocument, ReportCover, TaskImage } from '../domain/types';
+import type {
+  DeletedTaskRef,
+  ProjectDocument,
+  ProjectServer,
+  ReportCover,
+  TaskImage,
+} from '../domain/types';
 
 export const CURRENT_SCHEMA_VERSION = 1;
 
@@ -51,6 +57,8 @@ function normalizeProject(p: Project): Project {
     tasks: Array.isArray(p.tasks) ? p.tasks : [],
     documents: normalizeDocuments(p.documents),
     reportCover: normalizeReportCover(p.reportCover),
+    server: normalizeServer(p.server),
+    deletedTasks: normalizeDeletedTasks(p.deletedTasks),
   };
 }
 
@@ -70,6 +78,8 @@ function migrateToV1(raw: unknown): Project {
     tasks: Array.isArray(p.tasks) ? p.tasks : [],
     documents: normalizeDocuments(p.documents),
     reportCover: normalizeReportCover(p.reportCover),
+    server: normalizeServer(p.server),
+    deletedTasks: normalizeDeletedTasks(p.deletedTasks),
   };
 }
 
@@ -143,6 +153,49 @@ function normalizeDocuments(documents: unknown): ProjectDocument[] {
         typeof (doc as ProjectDocument).dataUrl === 'string' &&
         typeof (doc as ProjectDocument).hash === 'string',
     );
+}
+
+/* Löschvermerke für den Abgleich: nur vollständige Einträge übernehmen. */
+function normalizeDeletedTasks(value: unknown): DeletedTaskRef[] {
+  if (!Array.isArray(value)) return [];
+  const out: DeletedTaskRef[] = [];
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue;
+    const ref = item as Partial<DeletedTaskRef>;
+    if (
+      typeof ref.id !== 'string' ||
+      !ref.id ||
+      typeof ref.deletedAt !== 'string' ||
+      !ref.deletedAt
+    ) {
+      continue;
+    }
+    out.push({ id: ref.id, deletedAt: ref.deletedAt });
+  }
+  return out;
+}
+
+/* Seafile-Verknüpfung: nur vollständige Angaben übernehmen. Der Token gehört
+   bewusst nicht in die Projektdatei und wird separat auf dem Gerät gespeichert. */
+function normalizeServer(server: unknown): ProjectServer | undefined {
+  if (typeof server !== 'object' || server === null) return undefined;
+  const s = server as Partial<ProjectServer>;
+  if (
+    typeof s.url !== 'string' ||
+    !/^https?:\/\//i.test(s.url) ||
+    typeof s.repoId !== 'string' ||
+    !s.repoId.trim() ||
+    typeof s.path !== 'string' ||
+    !s.path.startsWith('/')
+  ) {
+    return undefined;
+  }
+  return {
+    url: s.url.replace(/\/+$/, ''),
+    repoId: s.repoId,
+    path: s.path,
+    linkedAt: typeof s.linkedAt === 'string' ? s.linkedAt : '',
+  };
 }
 
 /* Deckblatt-Einstellungen: übernehmen nur, wenn alle Felder Strings sind.
