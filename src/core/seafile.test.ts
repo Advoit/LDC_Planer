@@ -10,6 +10,7 @@ import {
   listDirectory,
   listFilesRecursive,
   listFilesRecursiveDetailed,
+  listFilesRecursiveDetailedCached,
   uploadFiles,
   uploadText,
 } from './seafile';
@@ -463,6 +464,43 @@ describe('Einzeldateien an Pfaden', () => {
       },
       { path: '/Haus 1/a.txt', name: 'a.txt' },
     ]);
+  });
+
+  it('überspringt unveränderte Ordner beim schnellen Abgleich', async () => {
+    const calls = mockFetch((url) => {
+      if (url === 'https://host.tld/api2/repos/repo-1/dir/?p=%2FHaus%201') {
+        return json([
+          { type: 'dir', name: 'Projekt', id: 'dir-1' },
+          { type: 'file', name: 'a.txt', size: 3, mtime: 1700000000 },
+        ]);
+      }
+      throw new Error(`Unerwartete URL: ${url}`);
+    });
+
+    const snapshot = await listFilesRecursiveDetailedCached(
+      CONN,
+      'secret-tree',
+      '/Haus 1',
+      { '/Haus 1/Projekt': 'dir-1' },
+      { '/Haus 1/Projekt/b.txt': 'hash-b' },
+    );
+
+    expect(snapshot?.files).toEqual([
+      {
+        path: '/Haus 1/Projekt/b.txt',
+        name: 'b.txt',
+      },
+      {
+        path: '/Haus 1/a.txt',
+        name: 'a.txt',
+        size: 3,
+        mtime: 1700000000,
+      },
+    ]);
+    expect(snapshot?.unchanged.has('/Haus 1/Projekt/b.txt')).toBe(true);
+    expect(snapshot?.dirIds['/Haus 1/Projekt']).toBe('dir-1');
+    /* Nur das Wurzelverzeichnis wurde abgefragt. */
+    expect(calls).toHaveLength(1);
   });
 });
 

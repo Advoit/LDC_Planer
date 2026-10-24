@@ -537,6 +537,27 @@ export interface RemoteFileEntry {
   id?: string;
 }
 
+/** Führt Aufgaben mit begrenzter Parallelität aus (schont Mobile & Server). */
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const index = next;
+      next += 1;
+      if (index >= items.length) return;
+      out[index] = await fn(items[index]);
+    }
+  };
+  const workerCount = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return out;
+}
+
 /** Liest alle Dateien eines Ordners rekursiv inklusive Metadaten. */
 export async function listFilesRecursiveDetailed(
   conn: SeafileConnection,
@@ -546,29 +567,134 @@ export async function listFilesRecursiveDetailed(
   const root = toRepoPath(conn, path);
   const files: RemoteFileEntry[] = [];
 
-  async function walk(dir: string): Promise<boolean> {
-    const entries = await listDirectory(conn, token, dir);
-    if (entries === null) return false;
-    for (const entry of entries) {
-      const child = `${dir.replace(/\/+$/, '')}/${entry.name}`;
-      if (entry.type === 'dir') {
-        await walk(child);
-      } else {
-        files.push({
-          path: child,
-          name: entry.name,
-          ...(entry.size !== undefined ? { size: entry.size } : {}),
-          ...(entry.mtime !== undefined ? { mtime: entry.mtime } : {}),
-          ...(entry.id ? { id: entry.id } : {}),
-        });
+  /* Verzeichnisse Ebene für Ebene lesen und bis zu vier gleichzeitig
+     abfragen – bei vielen Aufgaben spürbar schneller als streng sequenziell. */
+  let level: string[] = [root];
+  while (level.length > 0) {
+    const listings = await mapLimit(level, 4, (dir) =>
+      listDirectory(conn, token, dir),
+    );
+    const nextLevel: string[] = [];
+    for (let i = 0; i < level.length; i++) {
+      const dir = level[i];
+      const entries = listings[i];
+      if (entries === null) {
+        if (dir === root) return null;
+        continue;
+      }
+      for (const entry of entries) {
+        const child = `${dir.replace(/\/+$/, '')}/${entry.name}`;
+        if (entry.type === 'dir') {
+          nextLevel.push(child);
+        } else {
+          files.push({
+            path: child,
+            name: entry.name,
+            ...(entry.size !== undefined ? { size: entry.size } : {}),
+            ...(entry.mtime !== undefined ? { mtime: entry.mtime } : {}),
+            ...(entry.id ? { id: entry.id } : {}),
+          });
+        }
       }
     }
-    return true;
+    level = nextLevel;
   }
 
-  if (!(await walk(root))) return null;
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return files;
+}
+
+export interface RemoteTreeSnapshot {
+  files: RemoteFileEntry[];
+  /** Objekt-IDs der Verzeichnisse – ändern sich nur, wenn sich Inhalt ändert. */
+  dirIds: Record<string, string>;
+  /** Dateien aus unveränderten Ordnern (nicht erneut gelistet). */
+  unchanged: Set<string>;
+}
+
+/**
+ * Wie `listFilesRecursiveDetailed`, überspringt aber Verzeichnisse, deren
+ * Objekt-ID seit dem letzten Abgleich gleich geblieben ist. Seafile bildet die
+ * ID über den gesamten Inhalt eines Ordners – dadurch genügt bei vielen
+ * Aufgaben ein Blick auf den Aufgabenordner, statt jeden Aufgabenordner
+ * einzeln abzufragen.
+ */
+export async function listFilesRecursiveDetailedCached(
+  conn: SeafileConnection,
+  token: string,
+  path: string,
+  knownDirIds: Record<string, string>,
+  knownHashes: Record<string, string>,
+  /** Bereits gelisteter Wurzelordner – spart einen doppelten Aufruf. */
+  knownRootEntries?: RemoteDirEntry[] | null,
+): Promise<RemoteTreeSnapshot | null> {
+  const root = toRepoPath(conn, path);
+  const files: RemoteFileEntry[] = [];
+  const dirIds: Record<string, string> = {};
+  const unchanged = new Set<string>();
+
+  const rootEntries =
+    knownRootEntries === undefined
+      ? await listDirectory(conn, token, root)
+      : knownRootEntries;
+  if (rootEntries === null) return null;
+
+  const carryForward = (dir: string): void => {
+    const prefix = `${dir.replace(/\/+$/, '')}/`;
+    for (const filePath of Object.keys(knownHashes)) {
+      if (!filePath.startsWith(prefix)) continue;
+      files.push({
+        path: filePath,
+        name: filePath.slice(filePath.lastIndexOf('/') + 1),
+      });
+      unchanged.add(filePath);
+    }
+    for (const [knownPath, id] of Object.entries(knownDirIds)) {
+      if (knownPath === dir || knownPath.startsWith(prefix)) {
+        dirIds[knownPath] = id;
+      }
+    }
+  };
+
+  type Level = { dir: string; entries: RemoteDirEntry[] };
+  let level: Level[] = [{ dir: root, entries: rootEntries }];
+
+  while (level.length > 0) {
+    const nextDirs: string[] = [];
+    for (const { dir, entries } of level) {
+      for (const entry of entries) {
+        const child = `${dir.replace(/\/+$/, '')}/${entry.name}`;
+        if (entry.type === 'dir') {
+          if (entry.id) dirIds[child] = entry.id;
+          if (entry.id && knownDirIds[child] === entry.id) {
+            carryForward(child);
+          } else {
+            nextDirs.push(child);
+          }
+        } else {
+          files.push({
+            path: child,
+            name: entry.name,
+            ...(entry.size !== undefined ? { size: entry.size } : {}),
+            ...(entry.mtime !== undefined ? { mtime: entry.mtime } : {}),
+            ...(entry.id ? { id: entry.id } : {}),
+          });
+        }
+      }
+    }
+
+    const listings = await mapLimit(nextDirs, 4, (dir) =>
+      listDirectory(conn, token, dir),
+    );
+    level = [];
+    for (let i = 0; i < nextDirs.length; i++) {
+      const entries = listings[i];
+      if (entries !== null) level.push({ dir: nextDirs[i], entries });
+    }
+  }
+
+  files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return { files, dirIds, unchanged };
 }
 
 /** Liest alle Dateien eines Ordners rekursiv; `null`, wenn er fehlt. */

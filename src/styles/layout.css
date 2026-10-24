@@ -73,3 +73,65 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* ── Mobil: feste App-Hülle, nur der Inhalt scrollt ──
+   Kopf- und Fußleiste sind normale Flex-Kinder statt sticky/fixed. Dadurch
+   bleiben sie beim Scrollen vollständig sichtbar und werden nicht vom
+   mobilen Browser-Chrome verschoben oder angeschnitten. */
+@media (max-width: 639px) {
+  html,
+  body {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body {
+    padding-bottom: 0;
+  }
+
+  #app {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+
+  .toolbar {
+    position: relative;
+    top: auto;
+    flex: 0 0 auto;
+    background: var(--card-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .main-view,
+  .empty-state {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scroll-behavior: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Bei viel Inhalt oben beginnen, statt ihn aus dem sichtbaren Bereich
+     zu zentrieren. `safe center` bleibt in modernen Browsern zentriert,
+     solange alles passt. */
+  .empty-state {
+    justify-content: center;
+    justify-content: safe center;
+  }
+
+  .mobile-nav {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    flex: 0 0 auto;
+    transform: none;
+    will-change: auto;
+  }
+}

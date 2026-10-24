@@ -38,6 +38,12 @@ import {
 
 const appEl = document.getElementById('app')!;
 
+/* Scrollposition des Inhalts über Neuzeichnungen hinweg erhalten – die
+   App-Hülle bleibt stehen, nur .main-view bzw. .empty-state scrollt. */
+let renderedProjectId: string | null = null;
+let mainScrollTop = 0;
+let startScrollTop = 0;
+
 export async function initApp(): Promise<void> {
   setRenderer(renderApp);
   /* Große Projekte brauchen beim Start einen Moment – kurze Starts bleiben
@@ -56,12 +62,30 @@ export async function initApp(): Promise<void> {
 /* ── Rendering ── */
 
 function renderApp(): void {
+  const projectId = state.project?.id ?? null;
+  const sameView = renderedProjectId === projectId;
+  const oldMain = appEl.querySelector<HTMLElement>('.main-view');
+  const oldStart = appEl.querySelector<HTMLElement>('.empty-state');
+  if (oldMain) mainScrollTop = oldMain.scrollTop;
+  if (oldStart) startScrollTop = oldStart.scrollTop;
+  renderedProjectId = projectId;
+
   /* Sichtbarkeit der Sammel-Leiste wird beim Aufbau der Liste neu gesetzt */
   document.body.classList.remove('bulk-open');
   clear(appEl);
   appEl.appendChild(buildToolbar(toolbarOptions()));
   buildMain();
   appEl.appendChild(buildMobileNavigation(toolbarOptions()));
+
+  if (sameView) {
+    const main = appEl.querySelector<HTMLElement>('.main-view');
+    const start = appEl.querySelector<HTMLElement>('.empty-state');
+    if (main) main.scrollTop = mainScrollTop;
+    if (start) start.scrollTop = startScrollTop;
+  } else {
+    mainScrollTop = 0;
+    startScrollTop = 0;
+  }
 }
 
 function toolbarOptions(): Parameters<typeof buildToolbar>[0] {

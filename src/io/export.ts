@@ -140,14 +140,11 @@ export interface ProjectFileOptions {
  *       images/<Bild-ID>.png|.jpg|…
  *       documents/<Dokument-ID>.pdf|…
  */
-export function buildProjectFiles(
+function exportedProjectOf(
   project: Project,
-  options: ProjectFileOptions = {},
-): Record<string, Uint8Array> {
-  const files: Record<string, Uint8Array> = {};
-  const root = projectFolderName(project.id);
-
-  const exportedProject: ExportedProject = {
+  options: ProjectFileOptions,
+): ExportedProject {
+  return {
     schemaVersion: project.schemaVersion,
     id: project.id,
     name: project.name,
@@ -167,8 +164,68 @@ export function buildProjectFiles(
       ? { deletedTasks: project.deletedTasks }
       : {}),
   };
+}
+
+function exportedTaskOf(task: Task): ExportedTask {
+  return {
+    id: task.id,
+    projectId: task.projectId,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    name: task.name,
+    description: task.description,
+    images: task.images.map((img) => imageRef(img, 'images')),
+    thumbnail: task.thumbnail ? 'thumbnail.png' : null,
+    thumbnailSourceId: task.thumbnailSourceId,
+    material: task.material,
+    plannedWork: task.plannedWork,
+    personnel: task.personnel ?? 1,
+    typ: task.typ ?? 'maengel',
+    art: task.art ?? '',
+    pruefung: task.pruefung ?? '',
+    fehlerbeschreibung: task.fehlerbeschreibung ?? '',
+    position: task.position ?? '',
+    status: task.status,
+    editedBy: task.editedBy,
+    editedAt: task.editedAt,
+    hintText: task.hintText,
+    afterImages: task.afterImages.map((img) => imageRef(img, 'images')),
+    documents: (task.documents ?? []).map((doc) =>
+      documentRef(doc, 'documents'),
+    ),
+    afterDocuments: (task.afterDocuments ?? []).map((doc) =>
+      documentRef(doc, 'documents'),
+    ),
+  };
+}
+
+/** Nur die JSON-Dateien – ohne Bilder/Dokumente zu dekodieren. */
+export function buildProjectJsonFiles(
+  project: Project,
+  options: ProjectFileOptions = {},
+): Record<string, Uint8Array> {
+  const root = projectFolderName(project.id);
+  const files: Record<string, Uint8Array> = {};
   files[`${root}/project.json`] = strToU8(
-    JSON.stringify(exportedProject, null, 2),
+    JSON.stringify(exportedProjectOf(project, options), null, 2),
+  );
+  for (const task of project.tasks) {
+    files[`${root}/tasks/${task.id}/task.json`] = strToU8(
+      JSON.stringify(exportedTaskOf(task), null, 2),
+    );
+  }
+  return files;
+}
+
+export function buildProjectFiles(
+  project: Project,
+  options: ProjectFileOptions = {},
+): Record<string, Uint8Array> {
+  const files: Record<string, Uint8Array> = {};
+  const root = projectFolderName(project.id);
+
+  files[`${root}/project.json`] = strToU8(
+    JSON.stringify(exportedProjectOf(project, options), null, 2),
   );
 
   /* Projektbezogene Unterlagen */
@@ -179,37 +236,9 @@ export function buildProjectFiles(
 
   for (const task of project.tasks) {
     const dir = `${root}/tasks/${task.id}`;
-    const exportedTask: ExportedTask = {
-      id: task.id,
-      projectId: task.projectId,
-      createdAt: task.createdAt,
-      updatedAt: task.updatedAt,
-      name: task.name,
-      description: task.description,
-      images: task.images.map((img) => imageRef(img, 'images')),
-      thumbnail: task.thumbnail ? 'thumbnail.png' : null,
-      thumbnailSourceId: task.thumbnailSourceId,
-      material: task.material,
-      plannedWork: task.plannedWork,
-      personnel: task.personnel ?? 1,
-      typ: task.typ ?? 'maengel',
-      art: task.art ?? '',
-      pruefung: task.pruefung ?? '',
-      fehlerbeschreibung: task.fehlerbeschreibung ?? '',
-      position: task.position ?? '',
-      status: task.status,
-      editedBy: task.editedBy,
-      editedAt: task.editedAt,
-      hintText: task.hintText,
-      afterImages: task.afterImages.map((img) => imageRef(img, 'images')),
-      documents: (task.documents ?? []).map((doc) =>
-        documentRef(doc, 'documents'),
-      ),
-      afterDocuments: (task.afterDocuments ?? []).map((doc) =>
-        documentRef(doc, 'documents'),
-      ),
-    };
-    files[`${dir}/task.json`] = strToU8(JSON.stringify(exportedTask, null, 2));
+    files[`${dir}/task.json`] = strToU8(
+      JSON.stringify(exportedTaskOf(task), null, 2),
+    );
 
     for (const img of task.images) {
       const ext = MIME_EXT[dataUrlMime(img.dataUrl)] ?? '.img';
@@ -233,6 +262,42 @@ export function buildProjectFiles(
   }
 
   return files;
+}
+
+export interface ProjectFileSource {
+  hash: string;
+  dataUrl: string;
+}
+
+/**
+ * Liefert die lokalen Anhänge samt Inhalt-Hash, ohne sie zu dekodieren. So
+ * können beim Abgleich gezielt nur die tatsächlich benötigten Dateien geladen
+ * werden.
+ */
+export function projectFileSources(
+  project: Project,
+): Record<string, ProjectFileSource> {
+  const out: Record<string, ProjectFileSource> = {};
+  const root = projectFolderName(project.id);
+
+  for (const doc of project.documents ?? []) {
+    const ref = documentRef(doc, 'documents');
+    out[`${root}/${ref.file}`] = { hash: doc.hash, dataUrl: doc.dataUrl };
+  }
+
+  for (const task of project.tasks) {
+    const dir = `${root}/tasks/${task.id}`;
+    for (const img of [...task.images, ...task.afterImages]) {
+      const ref = imageRef(img, 'images');
+      out[`${dir}/${ref.file}`] = { hash: img.hash, dataUrl: img.dataUrl };
+    }
+    for (const doc of [...(task.documents ?? []), ...(task.afterDocuments ?? [])]) {
+      const ref = documentRef(doc, 'documents');
+      out[`${dir}/${ref.file}`] = { hash: doc.hash, dataUrl: doc.dataUrl };
+    }
+  }
+
+  return out;
 }
 
 /**

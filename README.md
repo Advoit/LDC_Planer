@@ -56,8 +56,8 @@ Ohne verknüpfte Seafile-Bibliothek bleibt alles lokal. Optional lässt sich ein
 **Abgleich**
 - Bibliothekslink, Zielordner und API-Token unter **Projekt → Server** hinterlegen
 - Einzeldateien statt ZIP: Projekt, Aufgaben, Bilder und Dokumente liegen einzeln auf dem Server
-- Nur Änderungen werden übertragen – SHA-256-Vergleich und Datei-Metadaten verhindern unnötige Downloads
-- Zwei-Wege-Abgleich beim Öffnen und alle 20 Sekunden, automatischer Upload nach Änderungen
+- Nur Änderungen werden übertragen – SHA-256, Datei-Metadaten und Ordner-IDs verhindern unnötige Downloads; unveränderte Aufgabenordner werden übersprungen
+- Zwei-Wege-Abgleich beim Öffnen und alle 3 Sekunden, automatischer Upload nach Änderungen
 - Bearbeitungssperren für Aufgaben und Status-Icon für Online, Sync, Offline und Fehler
 
 Benötigt wird ein Seafile-Server mit CORS für `/api2`, `/api/v2.1`, `/upload-api` und `/seafhttp`. Der API-Token braucht `rw`-Rechte und bleibt lokal.

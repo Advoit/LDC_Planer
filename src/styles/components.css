@@ -1379,12 +1379,11 @@ body.bulk-open .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
   .mobile-nav { display: none; }
 }
 
-/* Mobil: Inhalt nicht von der Bottom-Navbar überdecken lassen */
+/* Mobil: Leisten ohne Blur – die App-Hülle hält sie fest, nur der Inhalt
+   scrollt (siehe layout.css). */
 @media (max-width: 639px) {
-  #app { padding-bottom: 76px; }
-
-  /* Ohne Blur bleibt die fixierte Leiste beim Scrollen stabil und spart
-     auf schwächeren Geräten Rechenzeit. */
+  /* Ohne Blur bleibt die Leiste beim Scrollen stabil und spart auf
+     schwächeren Geräten Rechenzeit. */
   .mobile-nav,
   .bulk-bar {
     background: var(--card-bg);

@@ -83,13 +83,13 @@ function makeProject(): Project {
   };
 }
 
-function makeTask(): Task {
+function makeTask(id = 'T1', name = 'Vom anderen Gerät'): Task {
   return {
-    id: 'T1',
+    id,
     projectId: 'ABCD1234',
     createdAt: '2026-02-02T10:00:00.000Z',
     updatedAt: '2026-02-02T10:00:00.000Z',
-    name: 'Vom anderen Gerät',
+    name,
     description: '',
     images: [],
     thumbnail: null,
@@ -376,38 +376,93 @@ describe('Abgleich mit geänderter project.json', () => {
   });
 });
 
+describe('Upload mit Anhängen', () => {
+  it('lädt neue Dokumente und die JSON-Dateien hoch', async () => {
+    stubLocalStorage();
+    const bytes = Uint8Array.from([1, 2, 3, 4]);
+    const document: ProjectDocument = {
+      id: 'DOC1',
+      name: 'Plan.pdf',
+      mime: 'application/pdf',
+      size: bytes.length,
+      dataUrl: 'data:application/pdf;base64,AQIDBA==',
+      hash: await sha256Hex(bytes.buffer),
+    };
+    const project: Project = { ...makeProject(), documents: [document] };
+    saveServerToken(project.server!, 'secret');
+    state.project = project;
+
+    let uploads = 0;
+    mockFetch((url) => {
+      if (url === `${BASE}/`) return json({ name: 'Bibliothek' });
+      if (url === `${BASE}/dir/?p=%2FBaustelle`) return json([]);
+      if (url.startsWith(`${BASE}/dir/?p=`)) {
+        return new Response('not found', { status: 404 });
+      }
+      if (url.startsWith(`${BASE}/upload-link/`)) {
+        return json('https://host.tld:8082/upload-api/token');
+      }
+      if (url.includes('/upload-api')) {
+        uploads++;
+        return new Response('ok');
+      }
+      throw new Error(`Unerwartete Anfrage: ${url}`);
+    });
+
+    const result = await syncNow();
+
+    expect(result.ok).toBe(true);
+    /* project.json + documents/DOC1.pdf */
+    expect(uploads).toBe(2);
+  });
+});
+
 describe('Automatischer Abgleich beim Polling', () => {
   it('übernimmt neue und gelöschte Aufgaben anderer Geräte ohne Neuladen', async () => {
     const store = stubLocalStorage();
     const local = makeProject();
+    local.tasks = [makeTask('T0', 'Bereits vorhanden')];
     saveServerToken(local.server!, 'secret');
     state.project = local;
 
     const remote: Project = {
       ...local,
       updatedAt: '2026-02-02T10:00:00.000Z',
-      tasks: [makeTask()],
+      tasks: [makeTask('T0', 'Bereits vorhanden'), makeTask()],
     };
     const rootName = 'LDC-Projekt-ABCD1234';
     const rootPath = `${CONN.path}/${rootName}`;
     const projectPath = `${rootPath}/project.json`;
+    const unchangedTaskPath = `${rootPath}/tasks/T0/task.json`;
+    const newTaskPath = `${rootPath}/tasks/T1/task.json`;
     let remoteFiles = buildProjectFiles(remote, { includeServer: false });
     const oldFiles = buildProjectFiles(local, { includeServer: false });
-    const oldProjectBytes = oldFiles[`${rootName}/project.json`];
-    const oldHash = await sha256Hex(
-      oldProjectBytes.buffer.slice(
-        oldProjectBytes.byteOffset,
-        oldProjectBytes.byteOffset + oldProjectBytes.byteLength,
-      ) as ArrayBuffer,
+    const hashOf = async (bytes: Uint8Array): Promise<string> =>
+      sha256Hex(
+        bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength,
+        ) as ArrayBuffer,
+      );
+    const oldHash = await hashOf(oldFiles[`${rootName}/project.json`]);
+    const oldTaskHash = await hashOf(
+      oldFiles[`${rootName}/tasks/T0/task.json`],
     );
     const key = 'https://host.tld|repo-1|/Baustelle|ABCD1234';
     store.set(
       'ldc.seafile.fileHashes',
-      JSON.stringify({ [key]: { [projectPath]: oldHash } }),
+      JSON.stringify({
+        [key]: { [projectPath]: oldHash, [unchangedTaskPath]: oldTaskHash },
+      }),
     );
     store.set(
       'ldc.seafile.fileSignatures',
-      JSON.stringify({ [key]: { [projectPath]: '1700000000:100' } }),
+      JSON.stringify({
+        [key]: {
+          [projectPath]: '1700000000:100',
+          [unchangedTaskPath]: '1700000000:700',
+        },
+      }),
     );
     store.set(
       'ldc.seafile.lastSync',
@@ -417,14 +472,21 @@ describe('Automatischer Abgleich beim Polling', () => {
     const dirs: Record<string, unknown[]> = {
       [rootPath]: [
         { type: 'file', name: 'project.json', size: 456, mtime: 1800000000 },
-        { type: 'dir', name: 'tasks' },
+        { type: 'dir', name: 'tasks', id: 'tasks-1' },
       ],
-      [`${rootPath}/tasks`]: [{ type: 'dir', name: 'T1' }],
+      [`${rootPath}/tasks`]: [
+        { type: 'dir', name: 'T0', id: 'task-0' },
+        { type: 'dir', name: 'T1', id: 'task-1' },
+      ],
+      [`${rootPath}/tasks/T0`]: [
+        { type: 'file', name: 'task.json', size: 700, mtime: 1700000000 },
+      ],
       [`${rootPath}/tasks/T1`]: [
         { type: 'file', name: 'task.json', size: 789, mtime: 1800000000 },
       ],
     };
     let uploads = 0;
+    const downloads: string[] = [];
     vi.stubGlobal('document', { hidden: false });
 
     mockFetch((url) => {
@@ -436,6 +498,7 @@ describe('Automatischer Abgleich beim Polling', () => {
       }
       if (url.startsWith(`${BASE}/file/?p=`)) {
         const path = repoPathFromUrl(url);
+        downloads.push(path);
         return json(
           `https://files.tld/seafhttp/files/${encodeURIComponent(path)}`,
         );
@@ -466,8 +529,11 @@ describe('Automatischer Abgleich beim Polling', () => {
 
     await pollOnce();
 
-    expect(state.project?.tasks.map((task) => task.id)).toEqual(['T1']);
-    expect(state.project?.tasks[0]?.name).toBe('Vom anderen Gerät');
+    expect(state.project?.tasks.map((task) => task.id)).toEqual(['T0', 'T1']);
+    expect(state.project?.tasks[1]?.name).toBe('Vom anderen Gerät');
+    /* Unveränderte task.json bleibt lokal, nur die neue wird geladen. */
+    expect(downloads).toContain(newTaskPath);
+    expect(downloads).not.toContain(unchangedTaskPath);
     /* Reiner Serverstand: lokal wurde nichts geändert, also nicht zurückschreiben. */
     expect(uploads).toBe(0);
 
@@ -475,12 +541,32 @@ describe('Automatischer Abgleich beim Polling', () => {
     await pollOnce();
     expect(uploads).toBe(0);
 
+    /* Nur project.json ändert sich: Der unveränderte Aufgabenordner wird über
+       seine Objekt-ID erkannt und nicht erneut durchgelistet. */
+    const touched: Project = {
+      ...remote,
+      updatedAt: '2026-02-03T10:00:00.000Z',
+    };
+    remoteFiles = buildProjectFiles(touched, { includeServer: false });
+    dirs[rootPath] = [
+      { type: 'file', name: 'project.json', size: 456, mtime: 1800000100 },
+      { type: 'dir', name: 'tasks', id: 'tasks-1' },
+    ];
+    const beforeTouch = downloads.length;
+
+    await pollOnce();
+
+    expect(state.project?.updatedAt).toBe('2026-02-03T10:00:00.000Z');
+    expect(downloads.slice(beforeTouch)).toEqual([projectPath]);
+    expect(uploads).toBe(0);
+
     /* Löschung auf dem anderen Gerät: Tombstone kommt über project.json. */
     const deletion: Project = {
-      ...remote,
+      ...touched,
       updatedAt: '2099-01-01T00:00:00.000Z',
       tasks: [],
       deletedTasks: [
+        { id: 'T0', deletedAt: '2099-01-01T00:00:00.000Z' },
         { id: 'T1', deletedAt: '2099-01-01T00:00:00.000Z' },
       ],
     };
@@ -489,12 +575,16 @@ describe('Automatischer Abgleich beim Polling', () => {
       { type: 'file', name: 'project.json', size: 456, mtime: 1800000200 },
     ];
     delete dirs[`${rootPath}/tasks`];
+    delete dirs[`${rootPath}/tasks/T0`];
     delete dirs[`${rootPath}/tasks/T1`];
 
     await pollOnce();
 
     expect(state.project?.tasks).toEqual([]);
-    expect(state.project?.deletedTasks?.map((ref) => ref.id)).toEqual(['T1']);
+    expect(state.project?.deletedTasks?.map((ref) => ref.id)).toEqual([
+      'T0',
+      'T1',
+    ]);
     expect(uploads).toBe(0);
   });
 });

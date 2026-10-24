@@ -33,18 +33,24 @@ import {
   downloadTextAtPath,
   getDeviceId,
   listDirectory,
-  listFilesRecursiveDetailed,
+  listFilesRecursiveDetailedCached,
   readServerToken,
   saveServerToken,
   uploadFiles,
   uploadTextAtPath,
 } from '../core/seafile';
+import type { RemoteDirEntry } from '../core/seafile';
 import { getPreference, setPreference } from '../core/preferences';
 import { randomId } from '../core/id';
 import { sha256Hex } from '../core/hash';
 import { CURRENT_SCHEMA_VERSION } from '../core/migrate';
 import type { ProgressReporter } from '../core/progress';
-import { buildProjectFiles, projectFileHashes } from '../io/export';
+import {
+  buildProjectJsonFiles,
+  dataUrlToBytes,
+  projectFileHashes,
+  projectFileSources,
+} from '../io/export';
 import { parseProjectFiles, parseProjectZip } from '../io/import';
 import { applyServerAccess } from '../io/share';
 import type { ServerAccess } from '../io/share';
@@ -87,9 +93,11 @@ const LAST_SYNC_KEY = 'seafile.lastSync';
 const FILE_LIST_KEY = 'seafile.files';
 const FILE_HASHES_KEY = 'seafile.fileHashes';
 const FILE_SIGNATURES_KEY = 'seafile.fileSignatures';
-const AUTO_SYNC_DELAY = 3000;
-/* Sperren und Serverstand alle 20 Sekunden prüfen. */
-const POLL_INTERVAL = 20_000;
+const DIR_IDS_KEY = 'seafile.dirIds';
+const AUTO_SYNC_DELAY = 700;
+/* Sperren und Serverstand alle 3 Sekunden prüfen – auf dem Handy zählt jede
+   Sekunde, bis eine Änderung des anderen Geräts sichtbar ist. */
+const POLL_INTERVAL = 3_000;
 const HEARTBEAT_INTERVAL = 60_000;
 
 let snapshot: SyncState = {
@@ -104,14 +112,15 @@ let busy = false;
 let pendingSync = false;
 let pendingPull = false;
 /* Lokale Änderungen oder ein eingemischter Serverstand warten noch auf den
-   Upload. Verhindert, dass die 20-Sekunden-Prüfung sie überspringt. */
+   Upload. Verhindert, dass die Hintergrundprüfung sie überspringt. */
 let uploadPending = false;
 let autoTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let pollInFlight = false;
-/* Solange keine Sperrdatei bekannt ist, wird der Ordner gelistet statt eine
-   fehlende Datei per GET anzufragen (vermeidet 404-Meldungen im Browser). */
-let lockFileKnown = false;
+/* Signatur der zuletzt gelesenen Sperrdatei – solange sie gleich bleibt, wird
+   die Datei nicht erneut geladen. */
+let lockFileSignature: string | null = null;
+let cachedLockFile: LockFile | null = null;
 const heartbeats = new Map<string, ReturnType<typeof setInterval>>();
 const heartbeatUsers = new Map<string, string>();
 
@@ -216,6 +225,26 @@ function writeFileSignatures(
   setPreference(FILE_SIGNATURES_KEY, map);
 }
 
+/* Objekt-IDs der Verzeichnisse: Bleiben sie gleich, hat sich im Ordner nichts
+   geändert und er muss nicht erneut durchgelistet werden. */
+
+function readDirIds(ctx: SyncContext): Record<string, string> {
+  const map = getPreference<Record<string, Record<string, string>>>(DIR_IDS_KEY, {});
+  const value = map[fileListKey(ctx)];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [path, id] of Object.entries(value)) {
+    if (typeof id === 'string') out[path] = id;
+  }
+  return out;
+}
+
+function writeDirIds(ctx: SyncContext, ids: Record<string, string>): void {
+  const map = { ...getPreference<Record<string, Record<string, string>>>(DIR_IDS_KEY, {}) };
+  map[fileListKey(ctx)] = ids;
+  setPreference(DIR_IDS_KEY, map);
+}
+
 /** Dateien, deren Inhalt sich gegenüber dem letzten Upload geändert hat. */
 export function filesToUpload(
   previous: Record<string, string>,
@@ -301,24 +330,36 @@ function context(): SyncContext | null {
 
 async function loadLockFile(ctx: SyncContext): Promise<LockFile> {
   const name = projectLockFileName(ctx.project.id);
-  if (!lockFileKnown) {
-    /* Erst im Ordner nachsehen: Eine fehlende Sperrdatei ist normal und soll
-       keinen 404-Request (und keine Fehlermeldung im Browser) erzeugen. */
-    const entries = await listDirectory(ctx.conn, ctx.token, ctx.conn.path);
-    const exists = Boolean(
-      entries?.some((entry) => entry.type === 'file' && entry.name === name),
-    );
-    if (!exists) return emptyLockFile();
-    lockFileKnown = true;
+  /* Ein Verzeichnisaufruf pro Prüfung genügt: Die Metadaten zeigen, ob sich
+     die Sperrdatei geändert hat. Nur dann wird sie wirklich geladen. */
+  const entries = await listDirectory(ctx.conn, ctx.token, ctx.conn.path);
+  const entry = entries?.find(
+    (item) => item.type === 'file' && item.name === name,
+  );
+  if (!entry) {
+    lockFileSignature = null;
+    cachedLockFile = null;
+    return emptyLockFile();
+  }
+
+  const signature = remoteSignature(entry);
+  if (signature && signature === lockFileSignature && cachedLockFile) {
+    return cachedLockFile;
   }
 
   const bytes = await downloadFile(ctx.conn, ctx.token, name);
   if (!bytes) {
-    lockFileKnown = false;
+    lockFileSignature = null;
+    cachedLockFile = null;
     return emptyLockFile();
   }
   try {
-    return normalizeLockFile(JSON.parse(new TextDecoder().decode(bytes)));
+    const parsed = normalizeLockFile(
+      JSON.parse(new TextDecoder().decode(bytes)),
+    );
+    cachedLockFile = parsed;
+    lockFileSignature = signature;
+    return parsed;
   } catch {
     return emptyLockFile();
   }
@@ -332,7 +373,8 @@ async function writeLockFile(ctx: SyncContext, file: LockFile): Promise<void> {
     JSON.stringify(file, null, 2),
     'application/json',
   );
-  lockFileKnown = true;
+  lockFileSignature = null;
+  cachedLockFile = file;
 }
 
 function setLocks(file: LockFile): void {
@@ -608,7 +650,7 @@ function modalOpen(): boolean {
 
 /**
  * Prüft Erreichbarkeit, holt die aktuellen Sperren und übernimmt Änderungen
- * anderer Geräte. Läuft alle 20 Sekunden und bei Rückkehr in den Tab.
+ * anderer Geräte. Läuft alle 3 Sekunden und bei Rückkehr in den Tab.
  */
 export async function pollOnce(): Promise<void> {
   if (document.hidden || pollInFlight || busy) return;
@@ -621,18 +663,18 @@ export async function pollOnce(): Promise<void> {
        der Abgleich alle Dateien laden. Der reguläre Sync holt das nach. */
     const folder = joinServerPath(ctx.conn.path, projectFolderName(ctx.project.id));
     const projectJson = joinServerPath(folder, 'project.json');
-    const hasBaseline =
-      !modalOpen() &&
-      Boolean(
-        readFileSignatures(ctx)[projectJson] || readFileHashes(ctx)[projectJson],
-      );
+    const hasBaseline = Boolean(
+      readFileSignatures(ctx)[projectJson] || readFileHashes(ctx)[projectJson],
+    );
 
     const result = await runSync({
-      pull: hasBaseline,
+      pull: hasBaseline && !modalOpen(),
       manual: false,
       background: true,
-      /* Alle 20 s nur prüfen; hochladen erst, wenn der Serverstand neu ist. */
+      /* Alle 3 s nur prüfen; hochladen erst, wenn der Serverstand neu ist. */
       skipUploadWhenUnchanged: true,
+      /* Der Verzeichnisaufruf im Pull prüft die Verbindung bereits. */
+      skipHealthCheck: hasBaseline,
     });
     if (!result.ok) return;
 
@@ -670,6 +712,8 @@ interface PullResult {
   /** true, wenn ein neuer Serverstand eingemischt und gezeichnet wurde. */
   changed: boolean;
   usedArchive: boolean;
+  /** true, wenn der zusammengeführte Stand hochgeladen werden muss. */
+  needsUpload: boolean;
 }
 
 function resolveRefPath(baseDir: string, file: string): string {
@@ -715,6 +759,13 @@ function collectProjectRefs(
   }
 }
 
+function taskIdFromTaskJsonPath(path: string): string | null {
+  const marker = '/tasks/';
+  const start = path.lastIndexOf(marker);
+  if (start < 0 || !path.endsWith('/task.json')) return null;
+  return path.slice(start + marker.length, -'/task.json'.length) || null;
+}
+
 function collectTaskRefs(
   bytes: Uint8Array,
   taskJsonPath: string,
@@ -745,6 +796,8 @@ async function downloadRemoteSnapshot(
   options: {
     base?: Project | null;
     projectJsonBytes?: Uint8Array | null;
+    /** Bereits gelisteter Projektordner aus dem schnellen Vorab-Check. */
+    projectEntries?: RemoteDirEntry[] | null;
     report?: ProgressReporter;
   } = {},
 ): Promise<RemoteSnapshot | null> {
@@ -754,23 +807,31 @@ async function downloadRemoteSnapshot(
     projectFolderName(projectId),
   );
   const projectJsonPath = joinServerPath(projectFolder, 'project.json');
-  const entries = await listFilesRecursiveDetailed(
+  const knownSignatures = readFileSignatures(ctx);
+  const knownHashes = readFileHashes(ctx);
+  const tree = await listFilesRecursiveDetailedCached(
     ctx.conn,
     ctx.token,
     projectFolder,
+    readDirIds(ctx),
+    knownHashes,
+    options.projectEntries,
   );
-  const knownSignatures = readFileSignatures(ctx);
-  const knownHashes = readFileHashes(ctx);
+  const entries = tree?.files ?? null;
   const remoteSignatures: Record<string, string> = {};
   const remoteSizes: Record<string, number> = {};
 
   let remote: Project | null = null;
   let hashes: Record<string, string> = {};
 
-  if (entries && entries.length > 0) {
+  if (tree && entries && entries.length > 0) {
     const paths = entries.map((entry) => entry.path);
     for (const entry of entries) {
-      const signature = remoteSignature(entry);
+      /* Aus unveränderten Ordnern übernommene Dateien behalten ihre zuletzt
+         bekannten Metadaten – ein erneutes Holen wäre unnötig. */
+      const signature = tree.unchanged.has(entry.path)
+        ? knownSignatures[entry.path] ?? null
+        : remoteSignature(entry);
       if (signature) remoteSignatures[entry.path] = signature;
       if (entry.size !== undefined) remoteSizes[entry.path] = entry.size;
     }
@@ -796,26 +857,68 @@ async function downloadRemoteSnapshot(
       (path) => path === projectJsonPath || path.endsWith('/task.json'),
     );
 
+    /* Unveränderte task.json müssen nicht erneut geladen werden. Gerade bei
+       vielen Aufgaben spart das auf dem Handy dutzende Download-Anfragen. */
+    const localJsonFiles = new Map<string, Uint8Array>();
+    if (options.base) {
+      for (const [relative, bytes] of Object.entries(
+        buildProjectJsonFiles(options.base, { includeServer: false }),
+      )) {
+        localJsonFiles.set(joinServerPath(ctx.conn.path, relative), bytes);
+      }
+    }
+    const localJsonHashes = new Map<string, string>();
+    const unchangedTaskIds = new Set<string>();
+
     /* Zuerst die JSON-Dateien: Sie enthalten die Hashes der Bild- und
        Dokumentdateien und entscheiden, was wirklich geladen werden muss. */
     for (const path of jsonPaths) {
       handled.add(path);
-      const bytes =
+      let bytes: Uint8Array | null =
         path === projectJsonPath && options.projectJsonBytes
           ? options.projectJsonBytes
-          : await downloadFileAtPath(ctx.conn, ctx.token, path);
+          : null;
+      let reusedLocal = false;
+
+      if (!bytes) {
+        const local = localJsonFiles.get(path);
+        const signature = remoteSignatures[path];
+        const knownHash = knownHashes[path];
+        if (local && signature && knownSignatures[path] === signature) {
+          let localHash = localJsonHashes.get(path);
+          if (!localHash) {
+            localHash = await hashBytes(local);
+            localJsonHashes.set(path, localHash);
+          }
+          if (knownHash && localHash === knownHash) {
+            bytes = local;
+            reusedLocal = true;
+          }
+        }
+      }
+
+      if (!bytes) bytes = await downloadFileAtPath(ctx.conn, ctx.token, path);
       if (bytes) {
         files.set(path, bytes);
         if (path === projectJsonPath) {
           collectProjectRefs(bytes, path, remoteRefHashes);
         } else {
-          collectTaskRefs(bytes, path, remoteRefHashes);
+          const taskId = taskIdFromTaskJsonPath(path);
+          if (reusedLocal && taskId && tree.unchanged.has(path)) {
+            /* Kompletter Aufgabenordner unverändert: lokale Fassung inklusive
+               Anhänge behalten. Wurde nur die task.json wiederverwendet, werden
+               die Anhänge trotzdem einzeln geprüft. */
+            unchangedTaskIds.add(taskId);
+          } else {
+            collectTaskRefs(bytes, path, remoteRefHashes);
+          }
         }
       }
       step();
     }
 
-    /* Lokale Dateien als Ersatz bereitstellen, wenn der Server-Hash passt. */
+    /* Nur die Anhänge dekodieren, die für geänderte/neue Aufgaben wirklich
+       gebraucht werden. Unveränderte Aufgaben liefern ihre lokalen Daten. */
     const localFiles = new Map<string, Uint8Array>();
     const localFileHashes = new Map<string, string>();
     if (options.base) {
@@ -826,9 +929,16 @@ async function downloadRemoteSnapshot(
       }
     }
     if (options.base && remoteRefHashes.size > 0) {
-      const built = buildProjectFiles(options.base, { includeServer: false });
-      for (const [relative, bytes] of Object.entries(built)) {
-        localFiles.set(joinServerPath(ctx.conn.path, relative), bytes);
+      const sources = new Map(
+        Object.entries(projectFileSources(options.base)).map(
+          ([relative, source]) => [joinServerPath(ctx.conn.path, relative), source],
+        ),
+      );
+      for (const [path, hash] of remoteRefHashes) {
+        const source = sources.get(path);
+        if (source && source.hash === hash) {
+          localFiles.set(path, dataUrlToBytes(source.dataUrl));
+        }
       }
     }
     const localHashes = new Map<string, string>();
@@ -842,8 +952,19 @@ async function downloadRemoteSnapshot(
       return hash;
     };
 
+    const unchangedTaskPrefixes = [...unchangedTaskIds].map(
+      (taskId) => `${projectFolder}/tasks/${taskId}/`,
+    );
+
     for (const path of paths) {
       if (handled.has(path)) continue;
+
+      /* Anhänge unveränderter Aufgaben werden lokal wiederverwendet. */
+      if (unchangedTaskPrefixes.some((prefix) => path.startsWith(prefix))) {
+        step();
+        continue;
+      }
+
       const expected = remoteRefHashes.get(path);
       const local = localFiles.get(path);
       const signature = remoteSignatures[path];
@@ -886,7 +1007,22 @@ async function downloadRemoteSnapshot(
     report('Projektdateien werden vorbereitet …');
     remote = await parseProjectFiles(files);
     if (remote) {
-      hashes = await hashProjectFiles(Object.fromEntries(files));
+      /* Unveränderte Aufgaben durch die vollständige lokale Fassung ersetzen
+         (die Anhänge wurden oben bewusst nicht erneut geladen). */
+      if (options.base && unchangedTaskIds.size > 0) {
+        const localById = new Map(
+          options.base.tasks.map((task) => [task.id, task]),
+        );
+        remote.tasks = remote.tasks.map((task) =>
+          unchangedTaskIds.has(task.id) ? localById.get(task.id) ?? task : task,
+        );
+      }
+      const computed = await hashProjectFiles(Object.fromEntries(files));
+      hashes = {};
+      for (const path of paths) {
+        const hash = computed[path] ?? knownHashes[path];
+        if (hash) hashes[path] = hash;
+      }
     }
   }
 
@@ -913,6 +1049,8 @@ async function downloadRemoteSnapshot(
     };
   }
 
+  if (tree) writeDirIds(ctx, tree.dirIds);
+
   return {
     project: remote,
     hashes,
@@ -924,7 +1062,7 @@ async function downloadRemoteSnapshot(
 async function pullRemote(ctx: SyncContext): Promise<PullResult> {
   const project = state.project;
   if (!project || project.id !== ctx.project.id) {
-    return { changed: false, usedArchive: false };
+    return { changed: false, usedArchive: false, needsUpload: false };
   }
 
   const projectFolder = joinServerPath(
@@ -937,16 +1075,18 @@ async function pullRemote(ctx: SyncContext): Promise<PullResult> {
   const knownSignatures = readFileSignatures(ctx);
   const knownProjectSignature = knownSignatures[projectJsonPath];
   let projectJsonBytes: Uint8Array | null = null;
+  let projectEntries: RemoteDirEntry[] | null | undefined;
 
   /* Schnellster Fall: Die Metadaten der project.json sind unverändert.
      Dann genügt ein einzelner Verzeichnisaufruf – kein Download, kein Hash. */
   if (knownProjectSignature) {
     const entries = await listDirectory(ctx.conn, ctx.token, projectFolder);
+    projectEntries = entries;
     const entry = entries?.find(
       (item) => item.type === 'file' && item.name === 'project.json',
     );
     if (entry && remoteSignature(entry) === knownProjectSignature) {
-      return { changed: false, usedArchive: false };
+      return { changed: false, usedArchive: false, needsUpload: false };
     }
   }
 
@@ -977,65 +1117,113 @@ async function pullRemote(ctx: SyncContext): Promise<PullResult> {
           });
         }
       }
-      return { changed: false, usedArchive: false };
+      return { changed: false, usedArchive: false, needsUpload: false };
     }
   }
 
   const snapshot = await downloadRemoteSnapshot(ctx, {
     base: project,
     projectJsonBytes,
+    projectEntries,
   });
-  if (!snapshot) return { changed: false, usedArchive: false };
+  if (!snapshot) {
+    return { changed: false, usedArchive: false, needsUpload: false };
+  }
 
   /* Während des Downloads kann das Projekt gewechselt haben. */
   if (state.project?.id !== project.id) {
-    return { changed: false, usedArchive: snapshot.usedArchive };
+    return {
+      changed: false,
+      usedArchive: snapshot.usedArchive,
+      needsUpload: false,
+    };
   }
 
   writeFileHashes(ctx, snapshot.hashes);
   writeFileSignatures(ctx, snapshot.signatures);
 
-  const lastSync = readLastSync(project.id);
-  if (lastSync && snapshot.project.updatedAt <= lastSync) {
-    return { changed: false, usedArchive: snapshot.usedArchive };
+  /* Eine geänderte project.json ist bereits der Beweis, dass der Serverstand
+     neu ist. Der frühere Vergleich mit der lokalen Uhrzeit konnte bei
+     abweichenden Geräteuhren echte Änderungen verschlucken. Nur die alte
+     ZIP-Sicherung wird noch gegen den letzten Stand geprüft. */
+  if (snapshot.usedArchive) {
+    const lastSync = readLastSync(project.id);
+    if (lastSync && snapshot.project.updatedAt <= lastSync) {
+      return { changed: false, usedArchive: true, needsUpload: false };
+    }
   }
 
   const merged = await runMergeFlow(project, snapshot.project);
   /* Nur einen neuen Zeitstempel setzen, wenn lokal etwas hinzugekommen ist.
      Sonst würde jedes Gerät die Änderung des anderen erneut hochladen. */
-  state.project = projectsHaveSameContent(merged, snapshot.project)
-    ? { ...merged, updatedAt: snapshot.project.updatedAt }
-    : touchProject(merged);
+  const needsUpload = !projectsHaveSameContent(merged, snapshot.project);
+  state.project = needsUpload
+    ? touchProject(merged)
+    : { ...merged, updatedAt: snapshot.project.updatedAt };
   await persist();
   render();
   showToast('Serverstand wurde zusammengeführt.', 'info');
-  return { changed: true, usedArchive: snapshot.usedArchive };
+  return {
+    changed: true,
+    usedArchive: snapshot.usedArchive,
+    needsUpload,
+  };
 }
 
 async function uploadProject(ctx: SyncContext): Promise<void> {
   const project = state.project;
   if (!project || project.id !== ctx.project.id) return;
 
-  const files = buildProjectFiles(project, { includeServer: false });
-  /* Hashes und Pfade einheitlich absolut speichern – so passen sie zu den
-     Pfaden, die beim Herunterladen vom Server entstehen. */
-  const absoluteFiles: Record<string, Uint8Array> = {};
-  for (const [path, bytes] of Object.entries(files)) {
-    absoluteFiles[joinServerPath(ctx.conn.path, path)] = bytes;
+  /* Nur JSON neu bauen und Anhänge über ihre gespeicherten Hashes vergleichen.
+     So werden beim Hochladen nicht jedes Mal alle Bilder dekodiert. */
+  const jsonFiles = buildProjectJsonFiles(project, { includeServer: false });
+  const absoluteJson: Record<string, Uint8Array> = {};
+  for (const [path, bytes] of Object.entries(jsonFiles)) {
+    absoluteJson[joinServerPath(ctx.conn.path, path)] = bytes;
   }
-  const hashes = await hashProjectFiles(absoluteFiles);
+  const hashes = await hashProjectFiles(absoluteJson);
+  for (const [relative, hash] of Object.entries(projectFileHashes(project))) {
+    hashes[joinServerPath(ctx.conn.path, relative)] = hash;
+  }
+
+  /* Vorschaubilder sind klein, haben aber keinen gespeicherten Hash. */
+  const thumbnails = new Map<string, Uint8Array>();
+  const root = projectFolderName(project.id);
+  for (const task of project.tasks) {
+    if (!task.thumbnail) continue;
+    const path = joinServerPath(
+      ctx.conn.path,
+      `${root}/tasks/${task.id}/thumbnail.png`,
+    );
+    const bytes = dataUrlToBytes(task.thumbnail);
+    thumbnails.set(path, bytes);
+    hashes[path] = await hashBytes(bytes);
+  }
+
   const previousHashes = readFileHashes(ctx);
   const changedPaths = filesToUpload(previousHashes, hashes);
+  const sources = new Map(
+    Object.entries(projectFileSources(project)).map(([relative, source]) => [
+      joinServerPath(ctx.conn.path, relative),
+      source,
+    ]),
+  );
 
   if (state.project?.id !== project.id) return;
 
   if (changedPaths.length > 0) {
-    const entries = changedPaths.map((path) => {
-      const bytes = absoluteFiles[path];
+    const entries: { path: string; content: Blob }[] = [];
+    for (const path of changedPaths) {
+      let bytes = absoluteJson[path] ?? thumbnails.get(path);
+      if (!bytes) {
+        const source = sources.get(path);
+        if (source) bytes = dataUrlToBytes(source.dataUrl);
+      }
+      if (!bytes) continue;
       const copy = new Uint8Array(bytes.byteLength);
       copy.set(bytes);
-      return { path, content: new Blob([copy]) };
-    });
+      entries.push({ path, content: new Blob([copy]) });
+    }
     /* Erst Bilder/Dokumente, dann task.json, zuletzt project.json – so verweist
        keine JSON-Datei auf eine Datei, die noch nicht hochgeladen ist. */
     const priority = (path: string): number => {
@@ -1045,14 +1233,18 @@ async function uploadProject(ctx: SyncContext): Promise<void> {
     };
     entries.sort((a, b) => priority(a.path) - priority(b.path));
 
-    await uploadFiles(ctx.conn, ctx.token, entries, (done, total) => {
-      update({ detail: `Serverdateien werden hochgeladen (${done}/${total}) …` });
-    });
+    if (entries.length > 0) {
+      await uploadFiles(ctx.conn, ctx.token, entries, (done, total) => {
+        update({ detail: `Serverdateien werden hochgeladen (${done}/${total}) …` });
+      });
+    } else {
+      update({ detail: 'Keine Änderungen zum Hochladen.' });
+    }
   } else {
     update({ detail: 'Keine Änderungen zum Hochladen.' });
   }
 
-  const newPaths = Object.keys(absoluteFiles);
+  const newPaths = Object.keys(hashes);
   const projectPrefix = joinServerPath(
     ctx.conn.path,
     projectFolderName(ctx.project.id),
@@ -1105,6 +1297,8 @@ async function runSync(opts: {
   background?: boolean;
   /** Nur hochladen, wenn der Serverstand tatsächlich Änderungen hatte. */
   skipUploadWhenUnchanged?: boolean;
+  /** Bei einer reinen Hintergrundprüfung entfällt der extra Status-Request. */
+  skipHealthCheck?: boolean;
 }): Promise<SyncRunResult> {
   const ctx = context();
   if (!ctx) {
@@ -1142,19 +1336,25 @@ async function runSync(opts: {
   }
 
   try {
-    await checkServer(ctx.conn, ctx.token);
+    if (!opts.skipHealthCheck) {
+      await checkServer(ctx.conn, ctx.token);
+    }
     const pulled = opts.pull
       ? await pullRemote(ctx)
-      : { changed: false, usedArchive: false };
+      : { changed: false, usedArchive: false, needsUpload: false };
     if (
       !opts.skipUploadWhenUnchanged ||
-      pulled.changed ||
+      pulled.needsUpload ||
       pulled.usedArchive ||
       uploadPending
     ) {
       uploadPending = true;
       await uploadProject(ctx);
       uploadPending = false;
+    } else if (pulled.changed) {
+      /* Reiner Serverstand, nichts zurückzuschreiben – aber „zuletzt
+         synchronisiert“ soll den übernommenen Stand zeigen. */
+      writeLastSync(ctx.project.id, new Date().toISOString());
     }
     /* Die alte ZIP-Sicherung nur entfernen, wenn sie tatsächlich gelesen
        wurde – sonst entstünde bei jedem Abgleich ein unnötiger 404-Request. */
@@ -1222,7 +1422,9 @@ export function scheduleAutoSync(): void {
   uploadPending = true;
   autoTimer = setTimeout(() => {
     autoTimer = null;
-    void runSync({ pull: false, manual: false });
+    /* Der Upload prüft die Verbindung selbst – ein zusätzlicher
+       Status-Request würde die Änderung nur verzögern. */
+    void runSync({ pull: false, manual: false, skipHealthCheck: true });
   }, AUTO_SYNC_DELAY);
 }
 
@@ -1237,7 +1439,8 @@ export async function startProjectSync(): Promise<void> {
   }
   uploadPending = false;
   currentLocks = {};
-  lockFileKnown = false;
+  lockFileSignature = null;
+  cachedLockFile = null;
   window.dispatchEvent(new CustomEvent('ldc:locks-changed'));
 
   const project = state.project;
@@ -1382,6 +1585,10 @@ export function installSyncEvents(): void {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) void pollOnce();
   });
+  /* PWA/Handy: Beim Zurückkehren sofort prüfen, statt auf den nächsten
+     Timer zu warten. */
+  window.addEventListener('focus', () => void pollOnce());
+  window.addEventListener('pageshow', () => void pollOnce());
 }
 
 /* ── Verbinden & Test ── */
