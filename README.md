@@ -40,12 +40,12 @@ Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben e
 
 **☁️ Server & Abgleich (optional)**
 - **Seafile verknüpfen:** Bibliothekslink und API-Token unter **Projekt → Server** eintragen
-- **Token bleibt lokal:** Jede Person trägt denselben Bibliotheks-Token einmalig auf ihrem Gerät ein
+- **Token bleibt lokal:** Jede Person trägt denselben Token einmalig auf ihrem Gerät ein – als persönlichen API-Token oder als Bibliotheks-Token (Bibliothek → Erweitert → API-Token, Rechte `rw`)
 - **Test:** schreibt, liest und löscht eine Testdatei auf dem Server
 - **Zwei-Wege-Abgleich:** Verknüpfen lädt die Projekt-ZIP hoch, Änderungen gehen automatisch nach, beim Öffnen wird der Serverstand zusammengeführt
 - **Status-Icon oben rechts:** grün online, blau beim Sync, gelb Server offline, rot nicht verbunden, grau ohne Server – antippen zeigt Details
 - **Bearbeitungssperre:** Wer eine Aufgabe öffnet, hält sie für andere gesperrt (rotes Schloss, nur Ansicht); ohne Heartbeat läuft die Sperre nach 5 Minuten ab
-- Voraussetzung: Seafile-Server mit CORS-Freigabe für `/api2`, `/api/v2.1`, `/upload-api` und `/seafhttp`
+- Voraussetzung: Seafile-Server mit CORS-Freigabe für `/api2`, `/api/v2.1`, `/upload-api` und `/seafhttp`; Bibliotheks-Token werden über `/api/v2.1/via-repo-token/…` angesprochen
 
 **✅ Status & Übersicht**
 - Statusfluss **Offen → Hinweis → Behoben** mit Pflichtfeldern („Bearbeitet von“, „Bearbeitet am“, Hinweistext)

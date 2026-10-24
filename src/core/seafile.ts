@@ -28,6 +28,36 @@ function repoApi(conn: SeafileConnection, suffix: string): string {
   return apiUrl(conn, `/api2/repos/${encodeURIComponent(conn.repoId)}/${suffix}`);
 }
 
+/* ── Token-Arten ──
+   Persönliche API-Token laufen über /api2/repos/<id>/… . Bibliotheks-Token
+   (Seafile: Bibliothek → Erweitert → API-Token) akzeptiert Seafile nur über
+   die via-repo-token-Endpunkte der API v2.1. Die Art wird beim ersten
+   erfolgreichen Test erkannt und für die Sitzung gemerkt. */
+
+type TokenMode = 'personal' | 'repo';
+
+const tokenModes = new Map<string, TokenMode>();
+
+function tokenModeKey(conn: SeafileConnection, token: string): string {
+  return `${conn.url.replace(/\/+$/, '')}|${conn.repoId}|${token}`;
+}
+
+function repoTokenApi(conn: SeafileConnection, suffix: string): string {
+  return apiUrl(conn, `/api/v2.1/via-repo-token/${suffix}`);
+}
+
+function isRepoToken(conn: SeafileConnection, token: string): boolean {
+  return tokenModes.get(tokenModeKey(conn, token)) === 'repo';
+}
+
+function rememberTokenMode(
+  conn: SeafileConnection,
+  token: string,
+  mode: TokenMode,
+): void {
+  tokenModes.set(tokenModeKey(conn, token), mode);
+}
+
 /**
  * Führt eine Anfrage aus. Netzwerkfehler (auch CORS) werden als `network`
  * gemeldet – nur so lässt sich „Server offline“ von „Token ungültig“ trennen.
@@ -64,7 +94,7 @@ async function send(
   if (response.status === 401 || response.status === 403) {
     throw new SeafileError(
       'auth',
-      'Zugang verweigert – API-Token oder Berechtigung prüfen.',
+      'Zugang verweigert – API-Token oder Berechtigung prüfen. Bei einem Bibliotheks-Token: Link und Bibliothek müssen übereinstimmen, der Token braucht Lese-/Schreibrechte (rw).',
       response.status,
     );
   }
@@ -101,12 +131,54 @@ function parseLinkValue(text: string): string {
   return trimmed.replace(/^"|"$/g, '');
 }
 
+/** Prüft einen Bibliotheks-Token und vergleicht die Bibliothek mit dem Link. */
+async function checkRepoToken(
+  conn: SeafileConnection,
+  token: string,
+): Promise<void> {
+  const response = await send(
+    repoTokenApi(conn, 'repo-info/'),
+    { method: 'GET' },
+    token,
+    15000,
+  );
+  const info = (await response.json().catch(() => null)) as {
+    repo_id?: unknown;
+  } | null;
+  if (
+    info &&
+    typeof info.repo_id === 'string' &&
+    info.repo_id &&
+    info.repo_id.toLowerCase() !== conn.repoId.toLowerCase()
+  ) {
+    throw new SeafileError(
+      'auth',
+      'Der Bibliotheks-Token gehört zu einer anderen Bibliothek. Bitte den Link der Bibliothek verwenden, für die der Token erstellt wurde.',
+    );
+  }
+  rememberTokenMode(conn, token, 'repo');
+}
+
 /** Prüft, ob Server und Bibliothek erreichbar sind. */
 export async function checkServer(
   conn: SeafileConnection,
   token: string,
 ): Promise<void> {
-  await send(repoApi(conn, ''), { method: 'GET' }, token, 15000);
+  if (isRepoToken(conn, token)) {
+    await checkRepoToken(conn, token);
+    return;
+  }
+
+  try {
+    await send(repoApi(conn, ''), { method: 'GET' }, token, 15000);
+    rememberTokenMode(conn, token, 'personal');
+  } catch (err) {
+    /* Ein Bibliotheks-Token wird von /api2 mit 401/403 abgelehnt. Dann über
+       die Token-API prüfen – und sicherstellen, dass der Token wirklich zu
+       der Bibliothek aus dem Link gehört. */
+    if (!(err instanceof SeafileError) || err.kind !== 'auth') throw err;
+    await checkRepoToken(conn, token);
+  }
 }
 
 async function getUploadLink(
@@ -114,12 +186,16 @@ async function getUploadLink(
   token: string,
   dir: string,
 ): Promise<string> {
-  const response = await send(
-    repoApi(conn, `upload-link/?p=${encodeURIComponent(dir)}`),
-    { method: 'GET' },
-    token,
-    20000,
-  );
+  /* Die via-repo-token-API erwartet den Pfad ohne abschließenden Schrägstrich. */
+  const linkPath = isRepoToken(conn, token)
+    ? dir === '/'
+      ? '/'
+      : dir.replace(/\/+$/, '')
+    : dir;
+  const url = isRepoToken(conn, token)
+    ? repoTokenApi(conn, `upload-link/?path=${encodeURIComponent(linkPath)}`)
+    : repoApi(conn, `upload-link/?p=${encodeURIComponent(dir)}`);
+  const response = await send(url, { method: 'GET' }, token, 20000);
   const link = parseLinkValue(await response.text());
   if (!/^https?:\/\//i.test(link)) {
     throw new SeafileError('http', 'Der Server hat keinen gültigen Upload-Link geliefert.');
@@ -162,14 +238,12 @@ export async function downloadFile(
   name: string,
 ): Promise<Uint8Array | null> {
   const filePath = joinServerPath(conn.path, name);
+  const url = isRepoToken(conn, token)
+    ? repoTokenApi(conn, `download-link/?path=${encodeURIComponent(filePath)}`)
+    : repoApi(conn, `file/?p=${encodeURIComponent(filePath)}`);
   let response: Response;
   try {
-    response = await send(
-      repoApi(conn, `file/?p=${encodeURIComponent(filePath)}`),
-      { method: 'GET' },
-      token,
-      20000,
-    );
+    response = await send(url, { method: 'GET' }, token, 20000);
   } catch (err) {
     if (err instanceof SeafileError && err.kind === 'notfound') return null;
     throw err;
@@ -204,13 +278,11 @@ export async function deleteFile(
   name: string,
 ): Promise<boolean> {
   const filePath = joinServerPath(conn.path, name);
+  const url = isRepoToken(conn, token)
+    ? repoTokenApi(conn, `file/?path=${encodeURIComponent(filePath)}`)
+    : repoApi(conn, `file/?p=${encodeURIComponent(filePath)}`);
   try {
-    await send(
-      repoApi(conn, `file/?p=${encodeURIComponent(filePath)}`),
-      { method: 'DELETE' },
-      token,
-      20000,
-    );
+    await send(url, { method: 'DELETE' }, token, 20000);
     return true;
   } catch (err) {
     if (err instanceof SeafileError && err.kind === 'notfound') return false;

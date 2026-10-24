@@ -271,7 +271,7 @@ export function openServerModal(): void {
     el('label', { class: 'field-label' }, ['API-Token']),
     tokenInput,
     el('p', { class: 'field-hint' }, [
-      'Den Token finden Sie in Seafile in der Bibliothek unter „Erweitert → API-Token“ (oder erhalten ihn von der Administration). Der Token bleibt lokal – jede Person trägt ihn auf ihrem Gerät einmalig ein.',
+      'Token: persönlicher API-Token (Konto) oder Bibliotheks-Token (Bibliothek → Erweitert → API-Token). Ein Bibliotheks-Token braucht Lese- und Schreibrechte (rw) und muss zu der Bibliothek aus dem Link gehören. Der Token bleibt lokal – jede Person trägt ihn auf ihrem Gerät einmalig ein.',
     ]),
     el('p', { class: 'field-hint' }, [
       'Der Seafile-Server muss Anfragen dieser App erlauben (CORS für /api2, /api/v2.1, /upload-api und /seafhttp).',

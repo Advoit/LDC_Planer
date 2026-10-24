@@ -113,4 +113,52 @@ describe('testServerConnection', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain('Zugang verweigert');
   });
+
+  it('funktioniert auch mit einem Bibliotheks-Token (via-repo-token)', async () => {
+    let uploaded = '';
+    const repoBase = 'https://host.tld/api/v2.1/via-repo-token';
+    const repoUpload = 'https://host.tld:8082/upload-api/token-repo';
+    const repoDownload =
+      'https://files.tld/seafhttp/files/token-repo/LDC-Test-ABCD1234.txt';
+
+    const calls = mockFetch(async (url, method, init) => {
+      if (url === `${BASE}/`) return new Response('', { status: 403 });
+      if (url === `${repoBase}/repo-info/`) return json({ repo_id: 'repo-1' });
+      if (url === `${repoBase}/upload-link/?path=%2FBaustelle`) {
+        return json(repoUpload);
+      }
+      if (url.startsWith(repoUpload)) {
+        const form = init.body as FormData;
+        uploaded = await (form.get('file') as File).text();
+        return new Response('ok');
+      }
+      if (
+        url ===
+        `${repoBase}/download-link/?path=%2FBaustelle%2FLDC-Test-ABCD1234.txt`
+      ) {
+        return json(repoDownload);
+      }
+      if (url === repoDownload) return new Response(uploaded);
+      if (
+        url === `${repoBase}/file/?path=%2FBaustelle%2FLDC-Test-ABCD1234.txt` &&
+        method === 'DELETE'
+      ) {
+        return new Response(null, { status: 200 });
+      }
+      throw new Error(`Unerwartete Anfrage: ${method} ${url}`);
+    });
+
+    const result = await testServerConnection(CONN, 'repo-secret', 'ABCD1234');
+
+    expect(result.error).toBeNull();
+    expect(result.ok).toBe(true);
+    expect(result.steps.map((step) => step.label)).toEqual([
+      'Server und Bibliothek erreichbar',
+      'Testdatei geschrieben',
+      'Testdatei gelesen',
+      'Testdatei gelöscht',
+    ]);
+    expect(uploaded).toContain('LDC Planer Test');
+    expect(calls.some((call) => call.method === 'DELETE')).toBe(true);
+  });
 });

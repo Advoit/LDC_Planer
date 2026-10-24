@@ -91,6 +91,126 @@ describe('checkServer', () => {
   });
 });
 
+describe('Bibliotheks-Token (via-repo-token)', () => {
+  it('erkennt einen Bibliotheks-Token und prüft die Bibliothek', async () => {
+    const calls = mockFetch((url) => {
+      if (url === 'https://host.tld/api2/repos/repo-1/') {
+        return new Response('', { status: 403 });
+      }
+      if (url === 'https://host.tld/api/v2.1/via-repo-token/repo-info/') {
+        return json({ repo_id: 'repo-1', repo_name: 'Bibliothek' });
+      }
+      throw new Error(`Unerwartete URL: ${url}`);
+    });
+
+    await checkServer(CONN, 'repo-token-check');
+
+    expect(calls.map((call) => call.url)).toEqual([
+      'https://host.tld/api2/repos/repo-1/',
+      'https://host.tld/api/v2.1/via-repo-token/repo-info/',
+    ]);
+  });
+
+  it('lehnt einen Bibliotheks-Token für eine andere Bibliothek ab', async () => {
+    mockFetch((url) => {
+      if (url === 'https://host.tld/api2/repos/repo-1/') {
+        return new Response('', { status: 403 });
+      }
+      return json({ repo_id: 'repo-2', repo_name: 'Andere Bibliothek' });
+    });
+
+    await expect(checkServer(CONN, 'repo-token-other')).rejects.toMatchObject({
+      name: 'SeafileError',
+      kind: 'auth',
+      message: expect.stringContaining('anderen Bibliothek'),
+    });
+  });
+
+  it('nutzt den Upload-Link der Token-API', async () => {
+    const calls = mockFetch((url) => {
+      if (url === 'https://host.tld/api2/repos/repo-1/') {
+        return new Response('', { status: 403 });
+      }
+      if (url === 'https://host.tld/api/v2.1/via-repo-token/repo-info/') {
+        return json({ repo_id: 'repo-1' });
+      }
+      if (
+        url ===
+        'https://host.tld/api/v2.1/via-repo-token/upload-link/?path=%2FHaus%201'
+      ) {
+        return json('https://host.tld:8082/upload-api/token-repo');
+      }
+      if (url.startsWith('https://host.tld:8082/upload-api/token-repo')) {
+        return new Response('ok');
+      }
+      throw new Error(`Unerwartete URL: ${url}`);
+    });
+
+    await checkServer(CONN, 'repo-token-upload');
+    await uploadText(CONN, 'repo-token-upload', 'LDC-Projekt-ABCD.zip', 'hallo');
+
+    const post = calls.find((call) => call.url.includes('/upload-api/token-repo'));
+    expect(post).toBeDefined();
+    expect(post!.init.method).toBe('POST');
+    expect(header(post!, 'Authorization')).toBeNull();
+    const form = post!.init.body as FormData;
+    expect(form.get('parent_dir')).toBe('/Haus 1/');
+    expect(form.get('replace')).toBe('1');
+  });
+
+  it('nutzt den Download-Link der Token-API', async () => {
+    const calls = mockFetch((url) => {
+      if (url === 'https://host.tld/api2/repos/repo-1/') {
+        return new Response('', { status: 403 });
+      }
+      if (url === 'https://host.tld/api/v2.1/via-repo-token/repo-info/') {
+        return json({ repo_id: 'repo-1' });
+      }
+      if (
+        url ===
+        'https://host.tld/api/v2.1/via-repo-token/download-link/?path=%2FHaus%201%2FLDC-Test.txt'
+      ) {
+        return json('https://files.tld/seafhttp/files/token/LDC-Test.txt');
+      }
+      if (url === 'https://files.tld/seafhttp/files/token/LDC-Test.txt') {
+        return new Response('Testinhalt');
+      }
+      throw new Error(`Unerwartete URL: ${url}`);
+    });
+
+    await checkServer(CONN, 'repo-token-download');
+    const text = await downloadText(CONN, 'repo-token-download', 'LDC-Test.txt');
+
+    expect(text).toBe('Testinhalt');
+    expect(calls.some((call) => call.url.includes('/api2/repos/repo-1/file/'))).toBe(
+      false,
+    );
+  });
+
+  it('löscht über den Dateiendpunkt der Token-API', async () => {
+    const calls = mockFetch((url) => {
+      if (url === 'https://host.tld/api2/repos/repo-1/') {
+        return new Response('', { status: 403 });
+      }
+      if (url === 'https://host.tld/api/v2.1/via-repo-token/repo-info/') {
+        return json({ repo_id: 'repo-1' });
+      }
+      return new Response(null, { status: 200 });
+    });
+
+    await checkServer(CONN, 'repo-token-delete');
+    await expect(deleteFile(CONN, 'repo-token-delete', 'LDC-Test.txt')).resolves.toBe(
+      true,
+    );
+
+    const del = calls.find((call) => call.init.method === 'DELETE');
+    expect(del).toBeDefined();
+    expect(decodeURIComponent(del!.url)).toContain(
+      '/api/v2.1/via-repo-token/file/?path=/Haus 1/LDC-Test.txt',
+    );
+  });
+});
+
 describe('uploadText', () => {
   it('holt einen Upload-Link und schreibt in den verknüpften Ordner', async () => {
     const calls = mockFetch((url) => {
