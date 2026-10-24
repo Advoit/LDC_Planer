@@ -320,8 +320,8 @@
   border-radius: var(--radius);
   font-size: 14px;
   font-weight: 500;
-  color: #fff;
-  background: var(--text);
+  color: var(--toast-text);
+  background: var(--toast-bg);
   box-shadow: var(--shadow-md);
   opacity: 0;
   transition: opacity 0.25s, transform 0.25s;
@@ -342,7 +342,7 @@
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--toast-action-text);
   background: rgba(255, 255, 255, 0.92);
   cursor: pointer;
 }

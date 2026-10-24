@@ -14,6 +14,11 @@
   --success: #34C759;
   --warning: #FF9500;
 
+  /* Toasts: eigener dunkler Hintergrund, unabhängig vom Text-Farbwert */
+  --toast-bg: #1D1D1F;
+  --toast-text: #FFFFFF;
+  --toast-action-text: #1D1D1F;
+
   /* Status-Farben */
   --status-offen: #007AFF;
   --status-hinweis: #FF9500;
@@ -56,6 +61,7 @@
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
   --status-offen: #0A84FF;
   --status-hinweis: #FF9F0A;
+  --toast-bg: #3A3A3C;
 }
 
 /* Eingabehilfe: Systemwechsel ohne JavaScript weiterhin berücksichtigen,
