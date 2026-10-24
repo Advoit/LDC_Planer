@@ -18,8 +18,9 @@ import { migrateProject } from '../core/migrate';
 import { touchProject } from '../domain/project';
 import { buildProjectZip, projectZipFileName } from '../io/export';
 import { parseProjectZipDetailed } from '../io/import';
-import { applyServerAccess } from '../io/share';
+import { applyServerAccess, normalizeServerAccess } from '../io/share';
 import type { ServerAccess } from '../io/share';
+import { loadSharedProject } from './server-sync';
 import { withProgress } from './progress';
 import {
   activateProject,
@@ -100,7 +101,7 @@ export async function loadZip(): Promise<void> {
      blenden ZIP-Dateien sonst je nach Browser/Version aus. `.ldcproj` bleibt
      aus Abwärtskompatibilität wählbar (identisches ZIP-Format). */
   const file = await pickFile(
-    'application/zip,application/x-zip-compressed,application/octet-stream,.zip,.ldcproj',
+    'application/zip,application/x-zip-compressed,application/octet-stream,application/json,.zip,.ldcproj,.json',
   );
   if (!file) return;
   await importProjectFile(file);
@@ -110,6 +111,12 @@ export async function loadZip(): Promise<void> {
 export async function importProjectFile(file: File): Promise<void> {
   if (file.size === 0) {
     showToast('Die Datei ist leer.', 'error');
+    return;
+  }
+
+  /* Einzelne Zugangsdatei (JSON) – z. B. wenn sie separat weitergegeben wurde. */
+  if (file.name.toLowerCase().endsWith('.json') || file.type === 'application/json') {
+    await importAccessFile(file);
     return;
   }
 
@@ -128,6 +135,11 @@ export async function importProjectFile(file: File): Promise<void> {
     readFailed = true;
   }
   if (!imported) {
+    /* Freigabe-ZIPs enthalten nur die Server-Zugangsdaten, keine Projektdateien. */
+    if (access) {
+      await importServerAccess(access);
+      return;
+    }
     showToast(
       readFailed
         ? 'Die Datei konnte nicht gelesen werden. Bitte erneut auswählen.'
@@ -198,6 +210,78 @@ export async function importProjectFile(file: File): Promise<void> {
       );
     }
   }
+}
+
+/** Liest eine einzelne Zugangsdatei (JSON) ein. */
+async function importAccessFile(file: File): Promise<void> {
+  try {
+    const buffer = await readFileAsArrayBuffer(file);
+    const access = normalizeServerAccess(
+      JSON.parse(new TextDecoder().decode(buffer)) as unknown,
+    );
+    if (!access) {
+      showToast('Die Datei enthält keine gültigen Server-Zugangsdaten.', 'error');
+      return;
+    }
+    await importServerAccess(access);
+  } catch {
+    showToast('Die Zugangsdatei konnte nicht gelesen werden.', 'error');
+  }
+}
+
+/**
+ * Übernimmt eine reine Server-Zugangsdatei. Ist das Projekt lokal noch nicht
+ * vorhanden, wird der Serverstand direkt geladen – so funktioniert die
+ * Freigabe auch auf einem neuen Gerät ohne vorherigen Projektimport.
+ */
+async function importServerAccess(access: ServerAccess): Promise<void> {
+  const current = state.project;
+
+  if (current && current.id === access.projectId) {
+    const applied = applyServerAccess(current, access);
+    if (!applied.applied) {
+      showToast('Die Zugangsdatei passt nicht zu diesem Projekt.', 'error');
+      return;
+    }
+
+    state.project = applied.project;
+    await persist();
+    render();
+    /* Startet Abgleich und Sperr-Abfrage mit den übernommenen Zugangsdaten. */
+    window.dispatchEvent(new CustomEvent('ldc:project-activated'));
+    showToast('Server-Zugang übernommen.', 'success');
+    return;
+  }
+
+  /* Ein gespeichertes Projekt mit derselben ID hat Vorrang – seine lokalen
+     Änderungen werden beim Abgleich mit dem Serverstand zusammengeführt. */
+  const raw = await loadProject(access.projectId);
+  if (raw) {
+    const applied = applyServerAccess(migrateProject(raw), access);
+    if (!applied.applied) {
+      showToast('Die Zugangsdatei passt nicht zu diesem Projekt.', 'error');
+      return;
+    }
+    await activateProject(applied.project);
+    showToast('Server-Zugang übernommen – Serverstand wird abgeglichen.', 'info');
+    return;
+  }
+
+  /* Kein lokales Projekt: den vollständigen Stand vom Server laden. */
+  const loaded = await withProgress(
+    'Serverstand wird geladen …',
+    (report) => loadSharedProject(access, report),
+  );
+  if (!loaded.ok || !loaded.project) {
+    showToast(
+      loaded.error ?? 'Der Serverstand konnte nicht geladen werden.',
+      'error',
+    );
+    return;
+  }
+
+  await activateProject(loaded.project);
+  showToast('Projekt vom Server geladen.', 'success');
 }
 
 /* ── Sicherungsstände & Papierkorb ── */

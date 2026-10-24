@@ -10,6 +10,7 @@ import {
   downloadText,
   listDirectory,
   listFilesRecursive,
+  listFilesRecursiveDetailed,
   uploadFiles,
   uploadText,
 } from './seafile';
@@ -424,6 +425,45 @@ describe('Einzeldateien an Pfaden', () => {
     await expect(
       listFilesRecursive(CONN, 'secret-tree', '/Haus 1'),
     ).resolves.toEqual(['/Haus 1/Projekt/b.txt', '/Haus 1/a.txt']);
+  });
+
+  it('liest Datei-Metadaten für den schnellen Abgleich', async () => {
+    mockFetch((url) => {
+      if (url === 'https://host.tld/api2/repos/repo-1/dir/?p=%2FHaus%201') {
+        return json([
+          { type: 'dir', name: 'Projekt' },
+          { type: 'file', name: 'a.txt' },
+        ]);
+      }
+      if (
+        url ===
+        'https://host.tld/api2/repos/repo-1/dir/?p=%2FHaus%201%2FProjekt'
+      ) {
+        return json([
+          {
+            type: 'file',
+            name: 'b.txt',
+            size: 12,
+            mtime: 1700000000,
+            id: 'abc123',
+          },
+        ]);
+      }
+      throw new Error(`Unerwartete URL: ${url}`);
+    });
+
+    await expect(
+      listFilesRecursiveDetailed(CONN, 'secret-tree', '/Haus 1'),
+    ).resolves.toEqual([
+      {
+        path: '/Haus 1/Projekt/b.txt',
+        name: 'b.txt',
+        size: 12,
+        mtime: 1700000000,
+        id: 'abc123',
+      },
+      { path: '/Haus 1/a.txt', name: 'a.txt' },
+    ]);
   });
 });
 

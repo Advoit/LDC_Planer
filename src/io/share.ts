@@ -3,13 +3,8 @@
 import { strToU8, zipSync } from 'fflate';
 import { exportBaseName } from '../core/file-name';
 import { saveServerToken } from '../core/seafile';
-import {
-  normalizeServerPath,
-  projectFolderName,
-  safeNamePart,
-} from '../domain/server';
+import { normalizeServerPath, safeNamePart } from '../domain/server';
 import type { Project, ProjectServer } from '../domain/types';
-import { buildProjectFiles } from './export';
 
 /** Inhalt der Zugangsdatei – enthält bewusst den API-Token. */
 export interface ServerAccess {
@@ -64,18 +59,19 @@ export function createServerAccess(
 }
 
 /**
- * Baut eine Freigabe-ZIP: die normalen Projektdateien plus die Zugangsdatei.
- * Der Token steht nur in der Zugangsdatei, nicht in `project.json`.
+ * Baut die Freigabe-ZIP: ausschließlich die Zugangsdatei. Projektdateien
+ * werden bewusst nicht mitgegeben – geteilt wird nur der Server-Zugang.
  */
 export function buildShareZip(
-  project: Project,
+  projectId: string,
   access: ServerAccess,
 ): Uint8Array {
-  const files = buildProjectFiles(project);
-  files[`${projectFolderName(project.id)}/${accessFileName(project.id)}`] = strToU8(
-    JSON.stringify(access, null, 2),
+  return zipSync(
+    {
+      [accessFileName(projectId)]: strToU8(JSON.stringify(access, null, 2)),
+    },
+    { level: 6 },
   );
-  return zipSync(files, { level: 6 });
 }
 
 /** Prüft und normalisiert eine gelesene Zugangsdatei. */

@@ -4,9 +4,9 @@ import { el, downloadBlob } from './dom';
 import { openModal } from './modal';
 import { showToast } from './toast';
 import { state } from './app-state';
-import { syncNow } from './server-sync';
 import {
   SeafileError,
+  checkServer,
   createShareLink,
   readServerToken,
   uploadFileAtPath,
@@ -81,17 +81,17 @@ export function openShareModal(): void {
 
   const content = el('div', { class: 'server-form' }, [
     el('p', { class: 'export-hint' }, [
-      'Die Freigabe enthält das Projekt und eine Zugangsdatei mit Serveradresse, Bibliothek, Zielordner und API-Token. Wer die ZIP in der App lädt, übernimmt den Server-Zugang automatisch.',
+      'Die Freigabe enthält ausschließlich die Server-Zugangsdaten – keine Projektdateien. Beim Öffnen lädt die App den Projektstand automatisch vom Server.',
     ]),
     status,
     el('p', { class: 'field-label' }, ['Freigabe-Link']),
     linkRow,
     el('p', { class: 'field-hint' }, [
-      'Der Link lädt die Freigabe-ZIP von der Seafile-Bibliothek herunter. Empfänger öffnen die ZIP über Projekt → Laden; der Server-Zugang wird dabei hinterlegt.',
+      'Der Link lädt eine kleine Freigabe-ZIP. Diese (oder die separate Zugangsdatei) über Projekt → Laden öffnen; der Projektstand wird dann vom Server geladen.',
     ]),
     el('div', { class: 'share-actions' }, [downloadZipBtn, downloadAccessBtn]),
     el('p', { class: 'field-hint share-warning' }, [
-      'Achtung: Die Freigabe-ZIP enthält den API-Token. Nur an Personen weitergeben, die Zugriff auf die Bibliothek haben sollen. Beim erneuten Teilen wird die ZIP auf dem Server ersetzt; zum Beenden den Freigabe-Link in Seafile löschen.',
+      'Achtung: Die Freigabe-ZIP enthält den API-Token, aber keine Projektdateien. Nur an Personen weitergeben, die Zugriff auf die Bibliothek haben sollen. Beim erneuten Teilen wird die ZIP auf dem Server ersetzt; zum Beenden den Freigabe-Link in Seafile löschen.',
     ]),
   ]);
 
@@ -153,19 +153,6 @@ export function openShareModal(): void {
   void prepare();
 
   async function prepare(): Promise<void> {
-    let syncError: string | null = null;
-    let synced = false;
-    setStatus('Projekt wird mit dem Server abgeglichen …', 'info');
-
-    try {
-      const result = await syncNow();
-      synced = result.ok;
-      syncError = result.error;
-    } catch (err) {
-      syncError = errorText(err);
-    }
-    if (closed) return;
-
     const current = state.project;
     if (!current || current.id !== initialProjectId) {
       setStatus('Das Projekt wurde zwischenzeitlich gewechselt.', 'error');
@@ -192,7 +179,7 @@ export function openShareModal(): void {
     await new Promise((resolve) => setTimeout(resolve, 0));
     if (closed) return;
 
-    const bytes = buildShareZip(current, access);
+    const bytes = buildShareZip(current.id, access);
     const blob = new Blob(
       [
         bytes.buffer.slice(
@@ -207,16 +194,12 @@ export function openShareModal(): void {
     downloadZipBtn.disabled = false;
     downloadAccessBtn.disabled = false;
 
-    if (!synced) {
-      setStatus(
-        `Der Serverabgleich ist fehlgeschlagen: ${syncError ?? 'Unbekannter Fehler.'} Die Freigabe-ZIP kann lokal gespeichert und manuell weitergegeben werden.`,
-        'error',
-      );
-      return;
-    }
-
-    const path = joinServerPath(current.server.path, serverShareName(current.id));
     try {
+      setStatus('Server wird geprüft …', 'info');
+      await checkServer(current.server, token);
+      if (closed) return;
+
+      const path = joinServerPath(current.server.path, serverShareName(current.id));
       setStatus('Freigabe wird auf den Server geladen …', 'info');
       await uploadFileAtPath(current.server, token, path, blob);
       if (closed) return;

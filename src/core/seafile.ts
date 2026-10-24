@@ -459,6 +459,21 @@ export async function deleteFile(
 export interface RemoteDirEntry {
   type: 'file' | 'dir';
   name: string;
+  /** Größe in Byte (nur bei Dateien, sofern der Server sie liefert). */
+  size?: number;
+  /** Änderungszeit (Unix-Sekunden) – für den schnellen Abgleich. */
+  mtime?: number;
+  /** Inhalts-/Objekt-ID, sofern Seafile sie im Verzeichnis liefert. */
+  id?: string;
+}
+
+function remoteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
 }
 
 /** Liest ein Verzeichnis; `null`, wenn es nicht existiert. */
@@ -490,16 +505,70 @@ export async function listDirectory(
   const entries: RemoteDirEntry[] = [];
   for (const item of rawList) {
     if (typeof item !== 'object' || item === null) continue;
-    const entry = item as { type?: unknown; name?: unknown };
+    const entry = item as {
+      type?: unknown;
+      name?: unknown;
+      size?: unknown;
+      mtime?: unknown;
+      id?: unknown;
+    };
     if (
       (entry.type === 'file' || entry.type === 'dir') &&
       typeof entry.name === 'string' &&
       entry.name
     ) {
-      entries.push({ type: entry.type, name: entry.name });
+      const parsed: RemoteDirEntry = { type: entry.type, name: entry.name };
+      const size = remoteNumber(entry.size);
+      const mtime = remoteNumber(entry.mtime);
+      if (size !== undefined) parsed.size = size;
+      if (mtime !== undefined) parsed.mtime = mtime;
+      if (typeof entry.id === 'string' && entry.id) parsed.id = entry.id;
+      entries.push(parsed);
     }
   }
   return entries;
+}
+
+export interface RemoteFileEntry {
+  path: string;
+  name: string;
+  size?: number;
+  mtime?: number;
+  id?: string;
+}
+
+/** Liest alle Dateien eines Ordners rekursiv inklusive Metadaten. */
+export async function listFilesRecursiveDetailed(
+  conn: SeafileConnection,
+  token: string,
+  path: string,
+): Promise<RemoteFileEntry[] | null> {
+  const root = toRepoPath(conn, path);
+  const files: RemoteFileEntry[] = [];
+
+  async function walk(dir: string): Promise<boolean> {
+    const entries = await listDirectory(conn, token, dir);
+    if (entries === null) return false;
+    for (const entry of entries) {
+      const child = `${dir.replace(/\/+$/, '')}/${entry.name}`;
+      if (entry.type === 'dir') {
+        await walk(child);
+      } else {
+        files.push({
+          path: child,
+          name: entry.name,
+          ...(entry.size !== undefined ? { size: entry.size } : {}),
+          ...(entry.mtime !== undefined ? { mtime: entry.mtime } : {}),
+          ...(entry.id ? { id: entry.id } : {}),
+        });
+      }
+    }
+    return true;
+  }
+
+  if (!(await walk(root))) return null;
+  files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return files;
 }
 
 /** Liest alle Dateien eines Ordners rekursiv; `null`, wenn er fehlt. */
@@ -508,23 +577,8 @@ export async function listFilesRecursive(
   token: string,
   path: string,
 ): Promise<string[] | null> {
-  const root = toRepoPath(conn, path);
-  const files: string[] = [];
-
-  async function walk(dir: string): Promise<boolean> {
-    const entries = await listDirectory(conn, token, dir);
-    if (entries === null) return false;
-    for (const entry of entries) {
-      const child = `${dir.replace(/\/+$/, '')}/${entry.name}`;
-      if (entry.type === 'dir') await walk(child);
-      else files.push(child);
-    }
-    return true;
-  }
-
-  if (!(await walk(root))) return null;
-  files.sort();
-  return files;
+  const files = await listFilesRecursiveDetailed(conn, token, path);
+  return files?.map((entry) => entry.path) ?? null;
 }
 
 export interface SeafileShareLink {

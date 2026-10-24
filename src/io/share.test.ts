@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { unzipSync } from 'fflate';
 import {
   accessFileName,
   applyServerAccess,
@@ -39,18 +40,19 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 describe('Projekt teilen', () => {
-  it('baut eine Freigabe-ZIP mit Zugangsdatei und liest sie wieder ein', async () => {
+  it('baut eine Freigabe-ZIP nur mit Zugangsdatei und liest sie wieder ein', async () => {
     const project = makeProject();
     const access = createServerAccess(project, project.server!, ' secret ');
     expect(access).not.toBeNull();
     expect(access!.token).toBe('secret');
 
-    const parsed = await parseProjectZipDetailed(
-      toArrayBuffer(buildShareZip(project, access!)),
-    );
+    const zip = buildShareZip(project.id, access!);
+    /* Keine Projektdateien – nur der Server-Zugang. */
+    expect(Object.keys(unzipSync(zip))).toEqual([accessFileName(project.id)]);
 
-    expect(parsed.project).not.toBeNull();
-    expect(parsed.project!.id).toBe('PROJ5678');
+    const parsed = await parseProjectZipDetailed(toArrayBuffer(zip));
+
+    expect(parsed.project).toBeNull();
     expect(parsed.access).toEqual(access);
     expect(parsed.access!.path).toBe('/Bauprojekte/Haus 1');
     expect(parsed.access!.url).toBe('https://cloud.example.com');

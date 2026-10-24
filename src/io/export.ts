@@ -235,6 +235,43 @@ export function buildProjectFiles(
   return files;
 }
 
+/**
+ * Liefert die gespeicherten Inhalts-Hashes je Serverdatei. Wird für den
+ * schnellen Abgleich genutzt, damit unveränderte Dateien nicht erneut gehasht
+ * werden müssen.
+ */
+export function projectFileHashes(project: Project): Record<string, string> {
+  const out: Record<string, string> = {};
+  const root = projectFolderName(project.id);
+
+  for (const doc of project.documents ?? []) {
+    const ref = documentRef(doc, 'documents');
+    out[`${root}/${ref.file}`] = doc.hash;
+  }
+
+  for (const task of project.tasks) {
+    const dir = `${root}/tasks/${task.id}`;
+    for (const img of task.images) {
+      const ref = imageRef(img, 'images');
+      out[`${dir}/${ref.file}`] = img.hash;
+    }
+    for (const img of task.afterImages) {
+      const ref = imageRef(img, 'images');
+      out[`${dir}/${ref.file}`] = img.hash;
+    }
+    for (const doc of task.documents ?? []) {
+      const ref = documentRef(doc, 'documents');
+      out[`${dir}/${ref.file}`] = doc.hash;
+    }
+    for (const doc of task.afterDocuments ?? []) {
+      const ref = documentRef(doc, 'documents');
+      out[`${dir}/${ref.file}`] = doc.hash;
+    }
+  }
+
+  return out;
+}
+
 /** Baut die Projekt-ZIP-Datei aus denselben Dateien. */
 export function buildProjectZip(project: Project): Blob {
   const zipped = zipSync(buildProjectFiles(project), { level: 6 });
