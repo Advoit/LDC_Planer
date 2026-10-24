@@ -129,6 +129,7 @@ describe('testServerConnection', () => {
       }
       if (url.startsWith(repoUpload)) {
         const form = init.body as FormData;
+        expect(form.get('parent_dir')).toBe('/Baustelle');
         uploaded = await (form.get('file') as File).text();
         return new Response('ok');
       }

@@ -154,7 +154,8 @@ describe('Bibliotheks-Token (via-repo-token)', () => {
     expect(post!.init.method).toBe('POST');
     expect(header(post!, 'Authorization')).toBeNull();
     const form = post!.init.body as FormData;
-    expect(form.get('parent_dir')).toBe('/Haus 1/');
+    /* Muss exakt dem path-Parameter des Upload-Links entsprechen. */
+    expect(form.get('parent_dir')).toBe('/Haus 1');
     expect(form.get('replace')).toBe('1');
   });
 
@@ -212,6 +213,17 @@ describe('Bibliotheks-Token (via-repo-token)', () => {
 });
 
 describe('uploadText', () => {
+  it('meldet einen fehlenden Zielordner verständlich', async () => {
+    mockFetch(() => new Response('', { status: 404 }));
+
+    await expect(
+      uploadText(CONN, 'secret-missing', 'LDC-Test.txt', 'hallo'),
+    ).rejects.toMatchObject({
+      kind: 'notfound',
+      message: expect.stringContaining('Zielordner'),
+    });
+  });
+
   it('holt einen Upload-Link und schreibt in den verknüpften Ordner', async () => {
     const calls = mockFetch((url) => {
       if (url === 'https://host.tld/api2/repos/repo-1/upload-link/?p=%2FHaus%201%2F') {

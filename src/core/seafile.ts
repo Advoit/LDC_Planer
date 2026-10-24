@@ -195,7 +195,19 @@ async function getUploadLink(
   const url = isRepoToken(conn, token)
     ? repoTokenApi(conn, `upload-link/?path=${encodeURIComponent(linkPath)}`)
     : repoApi(conn, `upload-link/?p=${encodeURIComponent(dir)}`);
-  const response = await send(url, { method: 'GET' }, token, 20000);
+  let response: Response;
+  try {
+    response = await send(url, { method: 'GET' }, token, 20000);
+  } catch (err) {
+    if (err instanceof SeafileError && err.kind === 'notfound') {
+      throw new SeafileError(
+        'notfound',
+        `Der Zielordner „${linkPath}“ wurde auf dem Server nicht gefunden. Bitte den Link des Ordners prüfen.`,
+        404,
+      );
+    }
+    throw err;
+  }
   const link = parseLinkValue(await response.text());
   if (!/^https?:\/\//i.test(link)) {
     throw new SeafileError('http', 'Der Server hat keinen gültigen Upload-Link geliefert.');
@@ -212,13 +224,37 @@ export async function uploadFile(
 ): Promise<void> {
   const dir = serverDirPath(conn.path);
   const uploadLink = await getUploadLink(conn, token, dir);
+  /* Seafile verlangt, dass parent_dir exakt dem Pfad des Upload-Links
+     entspricht. Die via-repo-token-API arbeitet ohne abschließenden
+     Schrägstrich; /api2 erwartet ihn. */
+  const parentDir = isRepoToken(conn, token)
+    ? conn.path === '/'
+      ? '/'
+      : conn.path.replace(/\/+$/, '')
+    : dir;
   const form = new FormData();
   form.append('file', content, name);
-  form.append('parent_dir', dir);
+  form.append('parent_dir', parentDir);
   form.append('replace', '1');
 
   const separator = uploadLink.includes('?') ? '&' : '?';
-  await send(uploadLink + separator + 'ret-json=1', { method: 'POST', body: form }, null, 120000);
+  try {
+    await send(
+      uploadLink + separator + 'ret-json=1',
+      { method: 'POST', body: form },
+      null,
+      120000,
+    );
+  } catch (err) {
+    if (err instanceof SeafileError && err.kind === 'notfound') {
+      throw new SeafileError(
+        'notfound',
+        `Der Upload-Ordner „${parentDir}“ wurde auf dem Server nicht gefunden.`,
+        404,
+      );
+    }
+    throw err;
+  }
 }
 
 export async function uploadText(
