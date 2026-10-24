@@ -34,7 +34,7 @@ export function openServerModal(): void {
   const linkInput = el('input', {
     type: 'url',
     class: 'input',
-    placeholder: 'https://server/lib/<Bibliothek>/<Ordner>',
+    placeholder: 'https://server/library/<Bibliothek>/<Ordner>',
     value: existing ? serverLink(existing) : '',
     spellcheck: 'false',
     autocomplete: 'off',
@@ -266,7 +266,7 @@ export function openServerModal(): void {
     el('label', { class: 'field-label' }, ['Seafile-Link']),
     linkInput,
     el('p', { class: 'field-hint' }, [
-      'Form: https://server/lib/<Bibliothek>/<Ordner>. Freigabe- und Upload-Links reichen für den Abgleich nicht aus.',
+      'Form: https://server/library/<Bibliothek>/<Ordner> (ältere Server: /lib/…). Freigabe- und Upload-Links reichen für den Abgleich nicht aus.',
     ]),
     el('label', { class: 'field-label' }, ['API-Token']),
     tokenInput,

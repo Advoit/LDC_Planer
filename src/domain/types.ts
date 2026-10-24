@@ -126,6 +126,8 @@ export interface ProjectServer {
   repoId: string; // Bibliotheks-ID
   path: string; // Zielordner im Repo (mit führendem '/')
   linkedAt: string; // ISO – leer, solange nur vorbereitet
+  /** Link-Schreibweise der Seafile-Oberfläche („lib“ oder „library“). */
+  linkStyle?: 'lib' | 'library';
 }
 
 /* ── Projekt ── */

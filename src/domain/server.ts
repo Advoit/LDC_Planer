@@ -5,8 +5,10 @@ import type { ProjectServer } from './types';
 /** Verbindungsdaten, wie sie aus einem Seafile-Bibliothekslink entstehen. */
 export interface SeafileConnection {
   url: string; // Basis-URL der Seafile-Instanz, z. B. https://cloud.example.com
-  repoId: string; // Bibliotheks-ID aus /lib/<repo-id>/…
+  repoId: string; // Bibliotheks-ID aus /lib/<repo-id>/… oder /library/<repo-id>/…
   path: string; // Zielordner im Repo, immer mit führendem '/', ohne abschließenden '/'
+  /** Pfadsegment der Weboberfläche: „lib“ (älter) oder „library“ (neuer). */
+  linkStyle?: 'lib' | 'library';
 }
 
 /** Ergebnis der Link-Analyse. Genau eines von beiden ist gesetzt. */
@@ -17,7 +19,8 @@ export interface ParsedSeafileLink {
 
 /**
  * Liest Server, Bibliotheks-ID und Zielordner aus einem Seafile-Bibliothekslink
- * der Form `https://server/lib/<repo-id>/<ordner>/…`.
+ * der Form `https://server/lib/<repo-id>/<ordner>/…` oder der neueren Form
+ * `https://server/library/<repo-id>/<ordner>/…`.
  *
  * Freigabe- (`/f/…`) und Upload-Links (`/u/…`) reichen für den Abgleich nicht
  * aus und werden mit einer verständlichen Meldung abgelehnt.
@@ -41,7 +44,18 @@ export function parseSeafileLink(raw: string): ParsedSeafileLink {
     return fail('Der Link muss mit http:// oder https:// beginnen.');
   }
 
-  const marker = url.pathname.indexOf('/lib/');
+  const libMarker = url.pathname.indexOf('/lib/');
+  const libraryMarker = url.pathname.indexOf('/library/');
+  let marker = -1;
+  let linkStyle: 'lib' | 'library' = 'lib';
+  if (libMarker >= 0) {
+    marker = libMarker;
+    linkStyle = 'lib';
+  } else if (libraryMarker >= 0) {
+    marker = libraryMarker;
+    linkStyle = 'library';
+  }
+
   if (marker < 0) {
     if (url.pathname.startsWith('/f/')) {
       return fail(
@@ -54,12 +68,14 @@ export function parseSeafileLink(raw: string): ParsedSeafileLink {
       );
     }
     return fail(
-      'Bitte einen Bibliotheks-Link der Form https://server/lib/<Bibliothek>/<Ordner> einfügen.',
+      'Bitte einen Bibliotheks-Link der Form https://server/lib/<Bibliothek>/<Ordner> oder https://server/library/<Bibliothek>/<Ordner> einfügen.',
     );
   }
 
   const base = `${url.origin}${url.pathname.slice(0, marker)}`.replace(/\/+$/, '');
-  const rest = url.pathname.slice(marker + '/lib/'.length);
+  const rest = url.pathname.slice(
+    marker + (linkStyle === 'lib' ? '/lib/'.length : '/library/'.length),
+  );
   const rawSegments = rest.split('/').filter((part) => part.length > 0);
   const repoId = rawSegments.shift();
   if (!repoId) {
@@ -78,6 +94,7 @@ export function parseSeafileLink(raw: string): ParsedSeafileLink {
       url: base,
       repoId,
       path: segments.length > 0 ? `/${segments.join('/')}` : '/',
+      linkStyle,
     },
     error: null,
   };
@@ -88,8 +105,14 @@ function fail(error: string): ParsedSeafileLink {
 }
 
 /** Bibliothekslink aus gespeicherten Verbindungsdaten zusammensetzen. */
-export function serverLink(server: { url: string; repoId: string; path: string }): string {
-  const base = `${server.url.replace(/\/+$/, '')}/lib/${encodeURIComponent(server.repoId)}`;
+export function serverLink(server: {
+  url: string;
+  repoId: string;
+  path: string;
+  linkStyle?: 'lib' | 'library';
+}): string {
+  const style = server.linkStyle === 'library' ? 'library' : 'lib';
+  const base = `${server.url.replace(/\/+$/, '')}/${style}/${encodeURIComponent(server.repoId)}`;
   if (server.path === '/' || server.path === '') return `${base}/`;
   const suffix = server.path
     .split('/')

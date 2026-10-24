@@ -195,6 +195,9 @@ function normalizeServer(server: unknown): ProjectServer | undefined {
     repoId: s.repoId,
     path: s.path,
     linkedAt: typeof s.linkedAt === 'string' ? s.linkedAt : '',
+    ...(s.linkStyle === 'lib' || s.linkStyle === 'library'
+      ? { linkStyle: s.linkStyle }
+      : {}),
   };
 }
 

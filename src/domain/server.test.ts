@@ -39,6 +39,20 @@ describe('parseSeafileLink', () => {
       url: 'https://cloud.example.com',
       repoId: 'abc-123',
       path: '/Baustellen/Haus 1',
+      linkStyle: 'lib',
+    });
+  });
+
+  it('akzeptiert die neuere Schreibweise /library/', () => {
+    const result = parseSeafileLink(
+      'https://seafile.testseite.de/library/08176e96-c57b-4463-8a6a-3f48d5274ae3/DemoProjekt/',
+    );
+    expect(result.error).toBeNull();
+    expect(result.connection).toEqual({
+      url: 'https://seafile.testseite.de',
+      repoId: '08176e96-c57b-4463-8a6a-3f48d5274ae3',
+      path: '/DemoProjekt',
+      linkStyle: 'library',
     });
   });
 
@@ -54,6 +68,7 @@ describe('parseSeafileLink', () => {
       url: 'https://host.tld',
       repoId: 'r1',
       path: '/Aufgaben',
+      linkStyle: 'lib',
     });
   });
 
@@ -83,6 +98,14 @@ describe('parseSeafileLink', () => {
     expect(serverLink({ url: 'https://host.tld/', repoId: 'r1', path: '/' })).toBe(
       'https://host.tld/lib/r1/',
     );
+    expect(
+      serverLink({
+        url: 'https://host.tld',
+        repoId: 'r1',
+        path: '/DemoProjekt',
+        linkStyle: 'library',
+      }),
+    ).toBe('https://host.tld/library/r1/DemoProjekt');
   });
 });
 

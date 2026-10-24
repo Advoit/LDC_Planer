@@ -714,6 +714,7 @@ export async function connectProject(
       repoId: conn.repoId,
       path: conn.path,
       linkedAt: new Date().toISOString(),
+      ...(conn.linkStyle ? { linkStyle: conn.linkStyle } : {}),
     },
   });
   await persist();
