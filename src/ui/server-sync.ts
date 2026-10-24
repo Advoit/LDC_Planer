@@ -1257,7 +1257,7 @@ export async function loadSharedProject(
         ok: false,
         project: null,
         error:
-          'Auf dem Server wurde kein Projektstand gefunden. Bitte Freigabe-Link und Zugangsdaten prüfen.',
+          'Auf dem Server wurde kein Projektstand gefunden. Bitte Freigabe-ZIP und Zugangsdaten prüfen.',
       };
     }
 

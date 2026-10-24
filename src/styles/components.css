@@ -1724,19 +1724,6 @@ body.bulk-open .toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
 
 /* ── Projekt teilen ── */
 
-.share-link-row {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-}
-
-.share-link-row[hidden] { display: none; }
-
-.share-link-row .input {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
 .share-actions {
   display: flex;
   flex-wrap: wrap;

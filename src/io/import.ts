@@ -7,8 +7,8 @@ import type { ExportedProject, ExportedTask, DocumentRef, ImageRef } from './exp
 import { migrateProject } from '../core/migrate';
 import { createUiYielder, reportProgress } from '../core/progress';
 import type { ProgressReporter } from '../core/progress';
-import { readServerAccessFromFiles } from './share';
-import type { ServerAccess } from './share';
+import { readShareAccessFromFiles } from './share';
+import type { EncryptedServerAccess, ServerAccess } from './share';
 
 /**
  * Entpackt ein ZIP asynchron. Anders als `unzipSync` gibt fflate zwischen den
@@ -256,8 +256,10 @@ export async function parseProjectFiles(
 
 export interface ParsedProjectImport {
   project: Project | null;
-  /** In der ZIP enthaltene Server-Zugangsdatei (beim Teilen erzeugt). */
+  /** In der ZIP enthaltene offene Server-Zugangsdatei (beim Teilen erzeugt). */
   access: ServerAccess | null;
+  /** Verschlüsselte Zugangsdatei – benötigt ein Passwort zum Öffnen. */
+  encryptedAccess: EncryptedServerAccess | null;
 }
 
 /** Entpackt eine Projekt-ZIP, liest das Projekt und eine evtl. Zugangsdatei. */
@@ -274,13 +276,17 @@ export async function parseProjectZipDetailed(
   try {
     unzipped = await unzipAsync(data);
   } catch {
-    return { project: null, access: null };
+    return { project: null, access: null, encryptedAccess: null };
   }
 
   const files = new Map(Object.entries(unzipped));
-  const access = readServerAccessFromFiles(files);
+  const shareAccess = readShareAccessFromFiles(files);
   const project = await parseProjectFiles(files, onProgress);
-  return { project, access };
+  return {
+    project,
+    access: shareAccess.access,
+    encryptedAccess: shareAccess.encrypted,
+  };
 }
 
 /** Entpackt eine Projekt-ZIP und liest sie ein. */

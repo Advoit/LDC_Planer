@@ -5,8 +5,10 @@ import {
   applyServerAccess,
   buildShareZip,
   createServerAccess,
+  decryptServerAccess,
+  encryptedAccessFileName,
+  isEncryptedServerAccess,
   normalizeServerAccess,
-  serverShareName,
 } from './share';
 import { parseProjectZipDetailed } from './import';
 import type { Project } from '../domain/types';
@@ -46,7 +48,7 @@ describe('Projekt teilen', () => {
     expect(access).not.toBeNull();
     expect(access!.token).toBe('secret');
 
-    const zip = buildShareZip(project.id, access!);
+    const zip = await buildShareZip(project.id, access!);
     /* Keine Projektdateien – nur der Server-Zugang. */
     expect(Object.keys(unzipSync(zip))).toEqual([accessFileName(project.id)]);
 
@@ -54,8 +56,57 @@ describe('Projekt teilen', () => {
 
     expect(parsed.project).toBeNull();
     expect(parsed.access).toEqual(access);
+    expect(parsed.encryptedAccess).toBeNull();
     expect(parsed.access!.path).toBe('/Bauprojekte/Haus 1');
     expect(parsed.access!.url).toBe('https://cloud.example.com');
+  });
+
+  it('verschlüsselt die Zugangsdatei optional mit einem Passwort', async () => {
+    const project = makeProject();
+    const access = createServerAccess(project, project.server!, 'secret')!;
+
+    const zip = await buildShareZip(project.id, access, 'sicheres-passwort');
+    const files = unzipSync(zip);
+    expect(Object.keys(files)).toEqual([encryptedAccessFileName(project.id)]);
+
+    const raw = new TextDecoder().decode(
+      files[encryptedAccessFileName(project.id)],
+    );
+    expect(raw).not.toContain('secret');
+    const envelope = JSON.parse(raw) as unknown;
+    expect(isEncryptedServerAccess(envelope)).toBe(true);
+
+    const parsed = await parseProjectZipDetailed(toArrayBuffer(zip));
+    expect(parsed.project).toBeNull();
+    expect(parsed.access).toBeNull();
+    expect(parsed.encryptedAccess).not.toBeNull();
+
+    const decrypted = await decryptServerAccess(
+      parsed.encryptedAccess!,
+      'sicheres-passwort',
+    );
+    expect(decrypted).toEqual(access);
+    expect(
+      await decryptServerAccess(parsed.encryptedAccess!, 'falsches-passwort'),
+    ).toBeNull();
+
+    /* Manipulierte Nutzdaten dürfen nicht entschlüsselt werden. */
+    const tampered = {
+      ...parsed.encryptedAccess!,
+      data: `${parsed.encryptedAccess!.data.slice(0, -4)}AAAA`,
+    };
+    expect(
+      await decryptServerAccess(tampered, 'sicheres-passwort'),
+    ).toBeNull();
+  });
+
+  it('lehnt zu kurze Passwörter ab', async () => {
+    const project = makeProject();
+    const access = createServerAccess(project, project.server!, 'secret')!;
+
+    await expect(buildShareZip(project.id, access, 'kurz')).rejects.toThrow(
+      'mindestens',
+    );
   });
 
   it('übernimmt den Server-Zugang in ein geladenes Projekt', () => {
@@ -106,6 +157,8 @@ describe('Projekt teilen', () => {
 
   it('vergibt feste, sichere Dateinamen', () => {
     expect(accessFileName('PROJ/5678')).toBe('LDC-Zugang-PROJ_5678.json');
-    expect(serverShareName('PROJ/5678')).toBe('LDC-Freigabe-PROJ_5678.zip');
+    expect(encryptedAccessFileName('PROJ/5678')).toBe(
+      'LDC-Zugang-PROJ_5678.json.enc',
+    );
   });
 });

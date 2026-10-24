@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   SeafileError,
   checkServer,
-  createShareLink,
   deleteDirectoryAtPath,
   deleteFile,
   deleteFileAtPath,
@@ -464,45 +463,6 @@ describe('Einzeldateien an Pfaden', () => {
       },
       { path: '/Haus 1/a.txt', name: 'a.txt' },
     ]);
-  });
-});
-
-describe('createShareLink', () => {
-  it('erstellt einen Leselink für die Freigabe-ZIP', async () => {
-    mockFetch((url, init) => {
-      if (url === 'https://host.tld/api/v2.1/share-links/') {
-        expect(init.method).toBe('POST');
-        expect(new Headers(init.headers).get('Authorization')).toBe(
-          'Token secret',
-        );
-        expect(JSON.parse(init.body as string)).toEqual({
-          repo_id: 'repo-1',
-          path: '/Haus 1/LDC-Freigabe-ABCD.zip',
-          permissions: { can_edit: false, can_download: true },
-        });
-        return json({ link: '/f/abc123/', token: 'abc123' });
-      }
-      throw new Error(`Unerwartete URL: ${url}`);
-    });
-
-    const share = await createShareLink(
-      CONN,
-      'secret',
-      '/Haus 1/LDC-Freigabe-ABCD.zip',
-    );
-
-    expect(share).toEqual({ link: 'https://host.tld/f/abc123/', token: 'abc123' });
-  });
-
-  it('meldet eine unbrauchbare Antwort verständlich', async () => {
-    mockFetch(() => json({}));
-
-    await expect(
-      createShareLink(CONN, 'secret', '/Haus 1/Datei.zip'),
-    ).rejects.toMatchObject({
-      name: 'SeafileError',
-      message: expect.stringContaining('Freigabe-Link'),
-    });
   });
 });
 

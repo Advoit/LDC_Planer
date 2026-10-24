@@ -1,29 +1,18 @@
-/* ── Projekt teilen: Freigabe-ZIP mit Zugangsdatei und Seafile-Link ── */
+/* ── Projekt teilen: Freigabe-ZIP mit optionalem Passwort ── */
 
 import { el, downloadBlob } from './dom';
 import { openModal } from './modal';
 import { showToast } from './toast';
 import { state } from './app-state';
+import { readServerToken } from '../core/seafile';
+import { isLinkedServer } from '../domain/server';
 import {
-  SeafileError,
-  checkServer,
-  createShareLink,
-  readServerToken,
-  uploadFileAtPath,
-} from '../core/seafile';
-import { isLinkedServer, joinServerPath } from '../domain/server';
-import {
+  SHARE_PASSWORD_MIN_LENGTH,
   accessFileName,
   buildShareZip,
   createServerAccess,
-  serverShareName,
   shareZipDownloadName,
 } from '../io/share';
-
-function errorText(err: unknown): string {
-  if (err instanceof SeafileError) return err.message;
-  return err instanceof Error ? err.message : 'Unbekannter Fehler.';
-}
 
 /**
  * Öffnet den Freigabe-Dialog. Voraussetzung ist eine verknüpfte
@@ -41,57 +30,49 @@ export function openShareModal(): void {
     return;
   }
 
-  const initialProject = project;
   const initialProjectId = project.id;
 
   let closed = false;
-  let shareBlob: Blob | null = null;
+  let building = false;
   let accessText = '';
 
   const status = el('p', { class: 'server-feedback info' }, [
     'Freigabe wird vorbereitet …',
   ]);
 
-  const linkInput = el('input', {
-    type: 'url',
+  const passwordInput = el('input', {
+    type: 'password',
     class: 'input',
-    readonly: 'readonly',
+    placeholder: `Passwort (mind. ${SHARE_PASSWORD_MIN_LENGTH} Zeichen)`,
+    autocomplete: 'new-password',
     spellcheck: 'false',
-    autocomplete: 'off',
-    placeholder: 'Freigabe-Link',
   }) as HTMLInputElement;
-  const copyBtn = el('button', {
-    class: 'btn btn-secondary',
-    type: 'button',
-    disabled: 'disabled',
-  }, ['Kopieren']) as HTMLButtonElement;
-  const linkRow = el('div', { class: 'share-link-row' }, [linkInput, copyBtn]);
-  linkRow.hidden = true;
 
   const downloadZipBtn = el('button', {
-    class: 'btn btn-secondary',
+    class: 'btn btn-primary',
     type: 'button',
     disabled: 'disabled',
   }, ['Freigabe-ZIP speichern']) as HTMLButtonElement;
+
   const downloadAccessBtn = el('button', {
     class: 'btn btn-secondary',
     type: 'button',
     disabled: 'disabled',
-  }, ['Zugangsdatei speichern']) as HTMLButtonElement;
+  }, ['Zugangsdatei (ohne Passwort) speichern']) as HTMLButtonElement;
 
   const content = el('div', { class: 'server-form' }, [
     el('p', { class: 'export-hint' }, [
       'Die Freigabe enthält ausschließlich die Server-Zugangsdaten – keine Projektdateien. Beim Öffnen lädt die App den Projektstand automatisch vom Server.',
     ]),
     status,
-    el('p', { class: 'field-label' }, ['Freigabe-Link']),
-    linkRow,
+    el('label', { class: 'field-label' }, ['Passwort (optional)']),
+    passwordInput,
     el('p', { class: 'field-hint' }, [
-      'Der Link lädt eine kleine Freigabe-ZIP. Diese (oder die separate Zugangsdatei) über Projekt → Laden öffnen; der Projektstand wird dann vom Server geladen.',
+      'Leer lassen für eine unverschlüsselte ZIP. Mit Passwort werden die Zugangsdaten in der ZIP verschlüsselt; das Passwort wird nicht gespeichert und kann nicht wiederhergestellt werden.',
     ]),
     el('div', { class: 'share-actions' }, [downloadZipBtn, downloadAccessBtn]),
     el('p', { class: 'field-hint share-warning' }, [
-      'Achtung: Die Freigabe-ZIP enthält den API-Token, aber keine Projektdateien. Nur an Personen weitergeben, die Zugriff auf die Bibliothek haben sollen. Beim erneuten Teilen wird die ZIP auf dem Server ersetzt; zum Beenden den Freigabe-Link in Seafile löschen.',
+      'Achtung: Die ZIP enthält den API-Token. Ohne Passwort liegt er im Klartext. Nur an berechtigte Personen weitergeben und das Passwort getrennt übermitteln.',
     ]),
   ]);
 
@@ -118,41 +99,28 @@ export function openShareModal(): void {
     status.textContent = message;
   }
 
-  copyBtn.addEventListener('click', () => {
-    const value = linkInput.value.trim();
-    if (!value) return;
-    if (navigator.clipboard?.writeText) {
-      void navigator.clipboard.writeText(value).then(
-        () => showToast('Link kopiert.', 'success'),
-        () => {
-          linkInput.focus();
-          linkInput.select();
-          showToast('Link markiert – bitte manuell kopieren.', 'info');
-        },
-      );
-    } else {
-      linkInput.focus();
-      linkInput.select();
-      showToast('Link markiert – bitte manuell kopieren.', 'info');
-    }
-  });
+  function updateAccessButton(): void {
+    downloadAccessBtn.disabled =
+      building || !accessText || passwordInput.value.length > 0;
+  }
 
-  downloadZipBtn.addEventListener('click', () => {
-    if (!shareBlob) return;
-    downloadBlob(shareBlob, shareZipDownloadName(initialProject));
-  });
+  passwordInput.addEventListener('input', updateAccessButton);
 
   downloadAccessBtn.addEventListener('click', () => {
-    if (!accessText) return;
+    if (!accessText || passwordInput.value) return;
     downloadBlob(
       new Blob([accessText], { type: 'application/json' }),
       accessFileName(initialProjectId),
     );
   });
 
-  void prepare();
+  downloadZipBtn.addEventListener('click', () => {
+    void downloadZip();
+  });
 
-  async function prepare(): Promise<void> {
+  prepare();
+
+  function prepare(): void {
     const current = state.project;
     if (!current || current.id !== initialProjectId) {
       setStatus('Das Projekt wurde zwischenzeitlich gewechselt.', 'error');
@@ -174,54 +142,96 @@ export function openShareModal(): void {
       return;
     }
 
-    setStatus('Freigabe-ZIP wird erstellt …', 'info');
-    /* Kurz zeichnen lassen, bevor das ZIP-Packen den Main-Thread belegt. */
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    if (closed) return;
-
-    const bytes = buildShareZip(current.id, access);
-    const blob = new Blob(
-      [
-        bytes.buffer.slice(
-          bytes.byteOffset,
-          bytes.byteOffset + bytes.byteLength,
-        ) as ArrayBuffer,
-      ],
-      { type: 'application/zip' },
-    );
-    shareBlob = blob;
     accessText = JSON.stringify(access, null, 2);
     downloadZipBtn.disabled = false;
-    downloadAccessBtn.disabled = false;
+    updateAccessButton();
+    setStatus(
+      'Bereit. Passwort optional setzen und die Freigabe-ZIP speichern.',
+      'info',
+    );
+  }
+
+  async function downloadZip(): Promise<void> {
+    if (building) return;
+
+    const current = state.project;
+    if (!current || current.id !== initialProjectId) {
+      setStatus('Das Projekt wurde zwischenzeitlich gewechselt.', 'error');
+      return;
+    }
+    if (!current.server || !isLinkedServer(current.server)) {
+      setStatus('Die Server-Verknüpfung ist nicht mehr vorhanden.', 'error');
+      return;
+    }
+    const token = readServerToken(current.server);
+    if (!token) {
+      setStatus('Der API-Token fehlt auf diesem Gerät.', 'error');
+      return;
+    }
+    const access = createServerAccess(current, current.server, token);
+    if (!access) {
+      setStatus('Die Server-Zugangsdaten sind unvollständig.', 'error');
+      return;
+    }
+
+    const password = passwordInput.value;
+    if (password && password.length < SHARE_PASSWORD_MIN_LENGTH) {
+      setStatus(
+        `Das Passwort muss mindestens ${SHARE_PASSWORD_MIN_LENGTH} Zeichen haben.`,
+        'error',
+      );
+      passwordInput.focus();
+      return;
+    }
+
+    building = true;
+    downloadZipBtn.disabled = true;
+    updateAccessButton();
+    setStatus(
+      password
+        ? 'Verschlüsselte Freigabe-ZIP wird erstellt …'
+        : 'Freigabe-ZIP wird erstellt …',
+      'info',
+    );
 
     try {
-      setStatus('Server wird geprüft …', 'info');
-      await checkServer(current.server, token);
+      const bytes = await buildShareZip(
+        current.id,
+        access,
+        password || undefined,
+      );
       if (closed) return;
 
-      const path = joinServerPath(current.server.path, serverShareName(current.id));
-      setStatus('Freigabe wird auf den Server geladen …', 'info');
-      await uploadFileAtPath(current.server, token, path, blob);
-      if (closed) return;
-
-      setStatus('Freigabe-Link wird erstellt …', 'info');
-      const share = await createShareLink(current.server, token, path);
-      if (closed) return;
-
-      linkInput.value = share.link;
-      linkRow.hidden = false;
-      copyBtn.disabled = false;
+      const blob = new Blob(
+        [
+          bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength,
+          ) as ArrayBuffer,
+        ],
+        { type: 'application/zip' },
+      );
+      downloadBlob(blob, shareZipDownloadName(current));
       setStatus(
-        'Freigabe ist bereit. Link weitergeben – die Zugangsdatei ist in der ZIP enthalten.',
+        password
+          ? 'Verschlüsselte Freigabe-ZIP gespeichert. Passwort getrennt weitergeben.'
+          : 'Freigabe-ZIP gespeichert. Achtung: ohne Passwort im Klartext.',
         'success',
       );
     } catch (err) {
       if (closed) return;
       setStatus(
-        `Die Freigabe konnte nicht als Link bereitgestellt werden: ${errorText(err)} Die ZIP und die Zugangsdatei stehen unten zum Herunterladen bereit.`,
+        `Die Freigabe-ZIP konnte nicht erstellt werden: ${
+          err instanceof Error ? err.message : 'Unbekannter Fehler.'
+        }`,
         'error',
       );
+    } finally {
+      building = false;
+      if (!closed) {
+        downloadZipBtn.disabled = false;
+        updateAccessButton();
+      }
     }
   }
 }
-

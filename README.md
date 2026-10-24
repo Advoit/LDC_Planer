@@ -6,7 +6,10 @@
 
 ### ▶︎ [App öffnen](https://advoit.github.io/LDC_Planer/)
 
-<img src="https://img.shields.io/badge/offline--f%C3%A4hig-nach%20dem%20ersten%20Laden-34C759?style=flat-square" alt="offline-fähig"> <img src="https://img.shields.io/badge/Daten-standardm%C3%A4%C3%9Fig%20lokal-007AFF?style=flat-square" alt="Daten bleiben standardmäßig lokal"> <img src="https://img.shields.io/badge/mobil%20%26%20Desktop-responsiv-1D1D1F?style=flat-square" alt="mobil und Desktop"> <img src="https://img.shields.io/badge/installierbar-als%20App-FF9500?style=flat-square" alt="installierbar">
+<img src="https://img.shields.io/badge/offline--f%C3%A4hig-34C759?style=flat-square" alt="offline-fähig">
+<img src="https://img.shields.io/badge/Daten-lokal-007AFF?style=flat-square" alt="Daten bleiben lokal">
+<img src="https://img.shields.io/badge/PWA-installierbar-FF9500?style=flat-square" alt="installierbar">
+<img src="https://img.shields.io/badge/Seafile-optional-1D1D1F?style=flat-square" alt="Seafile optional">
 
 </div>
 
@@ -14,176 +17,114 @@
 
 ## Kurz gesagt
 
-Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben erfassen, Fotos und Pläne anhängen, den Bearbeitungsstand nachhalten und am Ende Bericht, Materialliste oder Instandsetzungsreport ausgeben.
+Der LDC Planer ist eine Web-App für die Baustelle: Mängel und Umbau-Aufgaben erfassen, Fotos und Pläne anhängen, den Status nachhalten und am Ende Berichte, Materiallisten oder den Instandsetzungsreport ausgeben.
 
-- **Standardmäßig lokal.** Keine Anmeldung, kein Zwang zu einem Server – die Projekte liegen im Browser-Speicher des Geräts. Wer möchte, verknüpft ein Projekt optional mit einer Seafile-Bibliothek.
-- **Auch ohne Netz.** Einmal geladen, funktioniert die App vollständig offline. Am Handy lässt sie sich wie eine normale App installieren.
-- **Sicherbar.** Jedes Projekt lässt sich als ZIP-Datei sichern, wieder laden, zusammenführen oder überschreiben.
+- **Standardmäßig lokal** – keine Anmeldung, kein Konto, kein Tracking. Projekte liegen im Browser-Speicher des Geräts.
+- **Offline nutzbar** – nach dem ersten Laden funktioniert die App ohne Netz und lässt sich wie eine native App installieren.
+- **Mobil & Desktop** – responsive, installierbar und mit Tag-/Nachtmodus.
+- **Sicherbar** – jedes Projekt als ZIP exportieren, wieder laden, zusammenführen oder überschreiben.
 
-## Funktionen
+## Schnellstart
 
-**📁 Projekte**
-- Beliebig viele Projekte parallel verwalten – öffnen, wechseln, löschen
-- Neues Projekt mit Name, Ort und Beschreibung (individuelle 8-stellige Projekt-ID)
-- Projekt-ZIP laden per Knopf **oder** einfach in die Ablagefläche auf der Startseite ziehen
-- Beim Laden wählen: **zusammenführen** (auch bei anderer Projekt-ID) oder **überschreiben**
+1. **[App öffnen](https://advoit.github.io/LDC_Planer/)** – keine Anmeldung nötig.
+2. **Projekt anlegen** (Name und Ort sind Pflicht) und Aufgaben erfassen – gespeichert wird automatisch.
+3. **Optional installieren:** am Handy „Zum Startbildschirm hinzufügen“, am Desktop das Installations-Symbol in der Adressleiste.
 
-**📝 Aufgaben**
-- Name und Beschreibung, Typ **Mängel** oder **Umbau/Neuinstallation**, Art **A1–C3**
-- Bei Mängeln zusätzlich: Prüfung, Fehlerbeschreibung, Position
-- Vorher- und Nachher-Bilder – antippen zum Vergrößern, in der Großansicht **zoomen** (Mausrad, Doppelklick, +/−, Tastatur) und bei Zoom **verschieben**; Vorschaubild wählbar, auf dem Handy **direkt fotografieren**
-- Große Fotos werden beim Hochladen automatisch verkleinert (längste Kante 1600 px)
-- Dokumente und Pläne je Aufgabe oder je Projekt, mit Vorschau im Browser
-- Material mit Vorschlägen aus früheren Aufgaben (Artikel **und** zuletzt verwendete Einheit)
-- Geplanter Arbeitsaufwand (hh:mm) und Personalbedarf
-- **Duplizieren** für ähnliche Aufgaben – Material und Bilder kommen mit, der Status startet neu
+## ✨ Funktionen
 
-**☁️ Server & Abgleich (optional)**
-- **Seafile verknüpfen:** Bibliothekslink, Zielordner und API-Token unter **Projekt → Server** eintragen
-- **Einzeldateien statt ZIP:** Im Zielordner liegt `LDC-Projekt-<ID>/` mit `project.json`, `tasks/<ID>/task.json`, `images/` und `documents/` – Bilder und Dokumente bleiben einzeln editierbar
-- **Zielordner frei wählbar:** leer oder `/` = Hauptverzeichnis der Bibliothek
-- **Token bleibt lokal:** Jede Person trägt denselben Token einmalig auf ihrem Gerät ein – als persönlichen API-Token oder als Bibliotheks-Token (Bibliothek → Erweitert → API-Token, Rechte `rw`). Nur beim **Teilen** wird der Token in die Zugangsdatei geschrieben.
-- **Test:** schreibt, liest und löscht eine Testdatei auf dem Server
-- **Nur Änderungen:** Vor dem Upload wird jede Datei per SHA-256 mit dem letzten Stand verglichen. Unveränderte Bilder, Dokumente und JSON-Dateien werden nicht erneut übertragen. Beim Öffnen wird zuerst nur die kleine `project.json` geprüft; ist sie unverändert, werden keine Bilder oder Dokumente erneut geladen. Hat sie sich geändert, werden die JSON-Dateien gelesen und nur die Bilder/Dokumente geladen, deren Hash vom lokalen Stand abweicht. Zusätzlich merkt sich die App Größe und Änderungszeit der Serverdateien: Sind sie unverändert, genügt ein Verzeichnisaufruf; nur bei Änderungen wird nachgeladen.
-- **Zwei-Wege-Abgleich:** Verknüpfen lädt die Einzeldateien hoch, Änderungen gehen automatisch nach, beim Öffnen wird der Serverstand zusammengeführt
-- **Teilen:** Bei verknüpftem Server unter **Projekt → Teilen** eine Freigabe-ZIP **nur mit den Server-Zugangsdaten** (keine Projektdateien) erzeugen, auf dem Server ablegen und einen Seafile-Link erhalten. Beim Laden der Freigabe (ZIP oder JSON) über **Projekt → Laden** wird der Server-Zugang hinterlegt. Ist das Projekt lokal noch nicht vorhanden, lädt die App den vollständigen Projektstand direkt vom Server – ein vorheriger Import ist nicht nötig.
-- **Umstieg & Aufräumen:** Eine vorhandene Projekt-ZIP wird beim ersten Abgleich eingelesen und danach entfernt; nicht mehr verwendete Dateien werden nach dem Upload gelöscht
-- **Status-Icon oben rechts:** grün online, blau beim Sync, gelb Server offline, rot nicht verbunden, grau ohne Server – antippen zeigt Details
-- **Bearbeitungssperre:** Wer eine Aufgabe öffnet, hält sie für andere gesperrt (rotes Schloss, nur Ansicht); ohne Heartbeat läuft die Sperre nach 5 Minuten ab
-- Voraussetzung: Seafile-Server mit CORS-Freigabe für `/api2`, `/api/v2.1`, `/upload-api` und `/seafhttp`; Bibliotheks-Token werden über `/api/v2.1/via-repo-token/…` angesprochen
+**Projekte**
+- Mehrere Projekte parallel verwalten, öffnen, wechseln und löschen
+- Projekt-ZIP per Knopf oder Drag & Drop laden – zusammenführen oder überschreiben
+- Automatische Sicherungsstände vor kritischen Aktionen
 
-**✅ Status & Übersicht**
-- Statusfluss **Offen → Hinweis → Behoben** mit Pflichtfeldern („Bearbeitet von“, „Bearbeitet am“, Hinweistext)
-- **Schnellwechsel** in der Detailansicht: Status antippen – Name und Datum sind vorbelegt
-- Suche und Filter (Status, Typ), Sortierung nach Name, Status, Zeitaufwand, Art oder Position
-- **Auswahlmodus**: mehrere Aufgaben auf einmal umstellen, als PDF ausgeben oder löschen
-- Aufgaben einzeln als PDF-Blatt ausgeben
+**Aufgaben**
+- Mängel oder Umbau/Neuinstallation, inklusive Art **A1–C3**
+- Statusfluss **Offen → Hinweis → Behoben** mit Bearbeiter, Datum und Hinweistext
+- Material mit Vorschlägen aus früheren Aufgaben, geplanter Arbeitsaufwand und Personalbedarf
+- Suche, Filter, Sortierung und Mehrfachauswahl
+- Aufgaben duplizieren, als PDF ausgeben oder in den Papierkorb legen
 
-**🛟 Wiederherstellung**
-- **Papierkorb** für gelöschte Aufgaben (max. 10) – inklusive „Rückgängig“ direkt nach dem Löschen
-- **Sicherungsstände**: vor Überschreiben, Zusammenführen und Wiederherstellen wird automatisch ein Stand gesichert
+**Bilder & Unterlagen**
+- Vorher-/Nachher-Bilder mit Zoom und wählbarem Vorschaubild
+- Fotos werden beim Hochladen automatisch optimiert
+- Dokumente und Pläne je Aufgabe oder Projekt, mit Vorschau
 
-**⏳ Ladeanzeige**
-- **Fortschrittsbalken** bei allen langen Vorgängen: Projekt laden oder importieren, Projektbericht, Materialliste, Aufgaben-PDF, Instandsetzungsreport und ZIP-Sicherung – mit Prozentangabe und Zähler („Aufgabe 12 von 40“)
-- **Kein Aufblitzen**: kurze Vorgänge (unter ~0,2 s) laufen ohne Anzeige durch
+## ☁️ Server & Teilen
 
-**🎨 Darstellung**
-- **Tag-/Nachtmodus** unter **Einstellungen** – die Wahl bleibt im Browser gespeichert; ohne eigene Wahl folgt die App der Geräteeinstellung
+Ohne verknüpfte Seafile-Bibliothek bleibt alles lokal. Optional lässt sich ein Projekt mit Seafile abgleichen.
 
-## Exporte
+**Abgleich**
+- Bibliothekslink, Zielordner und API-Token unter **Projekt → Server** hinterlegen
+- Einzeldateien statt ZIP: Projekt, Aufgaben, Bilder und Dokumente liegen einzeln auf dem Server
+- Nur Änderungen werden übertragen – SHA-256-Vergleich und Datei-Metadaten verhindern unnötige Downloads
+- Zwei-Wege-Abgleich beim Öffnen, automatischer Upload nach Änderungen
+- Bearbeitungssperren für Aufgaben und Status-Icon für Online, Sync, Offline und Fehler
 
-| Export | Inhalt | Datei |
+Benötigt wird ein Seafile-Server mit CORS für `/api2`, `/api/v2.1`, `/upload-api` und `/seafhttp`. Der API-Token braucht `rw`-Rechte und bleibt lokal.
+
+**Freigabe**
+- **Projekt → Teilen** erzeugt eine ZIP ausschließlich mit den Server-Zugangsdaten – keine Projektdateien.
+- Optional mit Passwort geschützt (mindestens 8 Zeichen): AES-256-GCM, Schlüsselableitung per PBKDF2-SHA-256 (600.000 Iterationen). Das Passwort wird nicht gespeichert und kann nicht wiederhergestellt werden.
+- Empfänger öffnen die ZIP über **Projekt → Laden** und geben bei Bedarf das Passwort ein. Ist das Projekt lokal noch nicht vorhanden, lädt die App den Projektstand direkt vom Server.
+- Es gibt **keinen Freigabe-Link und keinen Upload der ZIP**. Die Datei wird lokal gespeichert und manuell weitergegeben.
+
+> **Wichtig:** Frühere Versionen legten Freigabe-ZIPs mit Klartext-Token auf dem Server ab und erzeugten Links. Bitte alte `LDC-Freigabe-*.zip` und Links in Seafile löschen und den API-Token erneuern, falls er weitergegeben wurde.
+
+## 📄 Exporte
+
+| Export | Inhalt | Format |
 | --- | --- | --- |
-| **Projektbericht** | Deckblatt, klickbares Inhaltsverzeichnis, Projektinformationen, Unterlagen und alle Aufgaben – nach Status gruppiert, jede Aufgabe auf eigener Seite | PDF |
-| **Materialliste** | nach Aufgaben gruppiert oder als summierte Gesamtliste (nach Name + Einheit) | PDF, CSV |
-| **Einzelaufgabe** | eine Aufgabe als Blatt zum Ausdrucken oder Weitergeben | PDF |
-| **Instandsetzungsreport** | Report auf Basis der Vorlage `Instandsetzungsreport.pptx`, eine Seite pro Mangel, sortiert nach Position | PPTX |
+| **Projektbericht** | Deckblatt, Inhaltsverzeichnis, Projektinfos, Unterlagen und alle Aufgaben | PDF |
+| **Materialliste** | nach Aufgaben gruppiert oder als summierte Gesamtliste | PDF, CSV |
+| **Einzelaufgabe** | eine Aufgabe als druckbares Blatt | PDF |
+| **Instandsetzungsreport** | eine Seite pro Mangel, sortiert nach Position, mit Vorher-/Nachher-Fotos | PPTX |
 
-<details>
-<summary><strong>Mehr zum Instandsetzungsreport</strong></summary>
+## 🔒 Daten & Sicherheit
 
-- Zuerst öffnet sich das Fenster **„Deckblatt Einstellungen“**: Kennung, Saal, Straße, PLZ/Ort, Leitende EFK und Ausführungstermin. Die Angaben werden im Projekt gespeichert und mit der Sicherung exportiert.
-- Beim Ausführungstermin ist auch **„Unbekannt“** möglich – im Report steht dann `XX.XX.<aktuelles Jahr>`.
-- Mängel werden **natürlich nach Position sortiert** („A1“ vor „A2“ vor „A10“) und enthalten Material, Prüfung, Fehlerbeschreibung sowie den Hinweis zur Behebung.
-- Fotos landen in den beiden Kacheln der Vorlage: **oben Vorher-, unten Nachher-Bilder** (je bis zu 4) – als Raster 1 groß, 2 nebeneinander, 3 als 2+1, 4 als 2×2.
+- Projekte, Bilder und Dokumente liegen in **IndexedDB**; Einstellungen und Token in **localStorage**.
+- Ohne Server verlasst nichts das Gerät. Es gibt **keine Cookies von Drittanbietern und kein Tracking**.
+- Beim Server-Abgleich werden nur die Projektdateien und die Sperrdatei an die selbst angegebene Seafile-Bibliothek übertragen.
+- Freigabe-ZIPs enthalten den API-Token. Ohne Passwort im Klartext, mit Passwort verschlüsselt – nur an berechtigte Personen weitergeben.
+- Papierkorb und Sicherungsstände schützen vor versehentlichem Löschen oder Überschreiben.
 
-</details>
+## 🛠 Entwicklung
 
-## Los geht's
-
-1. **[App öffnen](https://advoit.github.io/LDC_Planer/)** – es ist keine Installation und keine Anmeldung nötig.
-2. **Optional als App installieren:** am Handy „Zum Startbildschirm hinzufügen“, am Desktop das Installations-Symbol in der Adressleiste. Danach startet der Planer wie eine eigene App.
-3. **Projekt anlegen** (Name und Ort sind Pflicht) und Aufgaben erfassen – gespeichert wird automatisch.
-
-## Speichern & Daten
-
-- **Automatisch:** Jede Änderung wird lokal gespeichert, spätestens beim Tab-Wechsel oder Schließen.
-- **Als Datei:** **Projekt → Speichern** schreibt eine ZIP-Sicherung mit allen Bildern und Dokumenten.
-- **Speicherplatz:** Die App fordert dauerhaften Speicher an und warnt, wenn es knapp wird – dann hilft eine ZIP-Sicherung.
-- **Optionaler Server:** Ohne verknüpfte Seafile-Bibliothek gibt es kein Backend – nichts verlässt das Gerät. Mit **Projekt → Server** werden die Projektdateien (JSON, Bilder und Dokumente) sowie die Sperrdatei an den angegebenen Seafile-Server übertragen; der API-Token bleibt lokal. Beim **Teilen** wird zusätzlich eine kleine Freigabe-ZIP nur mit der Zugangsdatei auf den Server gelegt.
-
-<details>
-<summary><strong>Aufbau der Projektdatei</strong></summary>
-
-```
-LDC-Projekt-<PROJEKT-ID>/
-├── project.json              # Projekt-Metadaten + Dokumenten-Referenzen
-├── documents/                # Projektbezogene Unterlagen
-└── tasks/
-    └── <AUFGABEN-ID>/
-        ├── task.json         # Aufgabendaten + Dokumenten-Referenzen
-        ├── thumbnail.png
-        ├── images/           # Vorher-/Nachher-Bilder
-        └── documents/        # Aufgaben-Dokumente
-```
-
-Auf dem Server liegt dieselbe Struktur **entpackt** – eine Projekt-ZIP entsteht bei **Projekt → Speichern**. Bilder und Dokumente werden per **SHA-256-Hash** dedupliziert – beim Zusammenführen werden identische Dateien übersprungen, unterschiedliche angehängt. Eine **Freigabe-ZIP** enthält ausschließlich `LDC-Zugang-<ID>.json` mit Serveradresse, Bibliothek, Zielordner und API-Token – **keine Projektdateien**. Beim Öffnen lädt die App den Projektstand vom Server; das Projekt muss lokal nicht vorhanden sein. Ältere Sicherungen (`.ldcproj`) bleiben ladbar.
-
-</details>
-
-## Datenschutz & Cookies
-
-Der Planer arbeitet standardmäßig offline und ohne Backend. Es gibt **keine Cookies von Drittanbietern und kein Tracking**. Daten werden nur übertragen, wenn Sie selbst eine Seafile-Bibliothek verknüpfen. Gespeichert wird ausschließlich, was für die Funktion erforderlich ist:
-
-| Kategorie | Zweck | Ort |
-| --- | --- | --- |
-| **Unbedingt erforderlich** (nicht abwählbar) | Projekte, Bilder und Dokumente | IndexedDB |
-| **Unbedingt erforderlich** | Einstellungen (Tag-/Nachtmodus, Ansicht/Filter, letzte Person) | localStorage |
-| **Unbedingt erforderlich** | App-Shell für die Offline-Nutzung | Service-Worker-Cache |
-| **Nur bei Server-Verknüpfung** | Projektdateien (JSON, Bilder, Dokumente) und Sperrdatei | Seafile-Server (vom Nutzer angegeben) |
-| **Nur bei Server-Verknüpfung** | API-Token | localStorage |
-| **Nur beim Teilen** | Freigabe-ZIP mit Zugangsdatei (enthält den API-Token, keine Projektdateien) | Seafile-Server (vom Nutzer angegeben) |
-
-Rechtsgrundlage ist § 25 Abs. 2 TDDDG (unbedingt erforderliche Speicherung). Beim ersten Start erscheint ein **einmaliger Hinweis**, der darüber informiert und die Entscheidung samt Zeitstempel festhält. Er lässt sich jederzeit über **Einstellungen → Info** erneut öffnen. Kommen später optionale Kategorien (z. B. Statistik) hinzu, erscheinen automatisch Zustimmungsschalter sowie „Alle akzeptieren“ und „Nur notwendige“ mit gleicher Gewichtung.
-
-## Feedback
-
-Verbesserungsvorschläge und Fehlerberichte sind willkommen: **[github.com/Advoit/LDC_Planer](https://github.com/Advoit/LDC_Planer)** – in der App über **Einstellungen → Verbesserungsvorschläge** erreichbar.
-
-## Entwicklung
-
-**Stack:** TypeScript (strict) · Vite · Vanilla JS ohne Framework · IndexedDB · vite-plugin-pwa · fflate (ZIP) · pdf-lib (PDF) · Vitest
+**Stack:** TypeScript (strict) · Vite · IndexedDB · PWA · fflate · pdf-lib · Vitest
 
 ```bash
 npm install     # Abhängigkeiten installieren
-npm run dev     # Dev-Server starten → http://localhost:5173
+npm run dev     # Dev-Server → http://localhost:5173
 npm run build   # Typecheck + Production-Build nach dist/
 npm test        # Tests ausführen
-
-npm run embed:instandsetzungs   # Instandsetzungsreport.pptx neu einbetten (nach Vorlagenänderungen)
 ```
 
-Der Branch `main` wird per GitHub Actions automatisch nach GitHub Pages veröffentlicht ([Workflow](.github/workflows/deploy.yml)).
+Weitere Befehle:
+
+```bash
+npm run icons:tabler             # Tabler-Icons neu einbetten
+npm run embed:instandsetzungs    # PPTX-Vorlage neu einbetten
+```
+
+Der Branch `main` wird per GitHub Actions automatisch nach GitHub Pages veröffentlicht. Details im [Deploy-Workflow](.github/workflows/deploy.yml).
 
 <details>
 <summary><strong>Projektstruktur</strong></summary>
 
-```
+```text
 src/
-├── core/     Infrastruktur: IndexedDB (storage, project-store, recovery-store),
-│             Migration, Hashing, Bild-Komprimierung, Dateinamen, Fortschritt,
-│             Einstellungen
-├── domain/   Fachlogik ohne UI: types, task (inkl. Duplizieren/Sammelstatus),
-│             project, task-filter, sort, merge, material
-├── io/       Dateien: ZIP-Export/-Import, PDF (pdf, pdf-cover, pdf-toc, pdf-task),
-│             Projektbericht, Aufgaben-PDF, Materialliste (PDF/CSV), PPTX-Report
-├── ui/       Oberfläche: app-state + Aktionen, Toolbar, Startseite, Projektliste,
-│             Aufgabenliste/-formular/-detail, Dialoge, Ladeanzeige, Assistenten
-├── styles/   CSS (Variablen, Layout, Komponenten)
-├── app.ts    App-Shell: Init, Rendering, Verdrahtung
-└── main.ts   Einstiegspunkt + Service-Worker
+├── core/     IndexedDB, Migration, Hashing, Bilder, Fortschritt, Einstellungen
+├── domain/   Typen und Fachlogik: Aufgaben, Projekte, Merge, Filter, Sortierung
+├── io/       ZIP, PDF, CSV, PPTX und Seafile-Dateiformate
+├── ui/       Oberfläche, Dialoge, Aktionen und Ladeanzeigen
+├── styles/   CSS-Variablen, Layout und Komponenten
+├── app.ts    App-Shell
+└── main.ts   Einstiegspunkt und Service Worker
 ```
 
 </details>
 
-## Icons
+## Icons & Lizenz
 
-Alle Symbole in der Oberfläche stammen von **[Tabler Icons](https://tabler.io/icons)** (MIT-Lizenz, Repository: [tabler/tabler-icons](https://github.com/tabler/tabler-icons)). Die verwendeten Icons sind als Inline-SVG in `src/ui/icons.ts` eingebunden und lassen sich mit einem Befehl neu von Tabler herunterladen:
-
-```bash
-npm run icons:tabler
-```
-
-## Lizenz
+Icons: [Tabler Icons](https://tabler.io/icons) (MIT). Sie liegen als Inline-SVG in `src/ui/icons.ts`.
 
 Privat / intern – kein Open-Source-Lizenzmodell hinterlegt.

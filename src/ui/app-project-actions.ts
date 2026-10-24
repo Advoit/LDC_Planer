@@ -1,6 +1,7 @@
 /* ── Aktionen rund um Projekte, Sicherungen, Dokumente und Exporte ── */
 
-import { downloadBlob, pickFile, readFileAsArrayBuffer } from './dom';
+import { downloadBlob, el, pickFile, readFileAsArrayBuffer } from './dom';
+import { openModal } from './modal';
 import { showToast } from './toast';
 import { openNewProjectFlow } from './project-form';
 import { showMergeOrOverwriteDialog, runMergeFlow } from './merge-flow';
@@ -18,8 +19,13 @@ import { migrateProject } from '../core/migrate';
 import { touchProject } from '../domain/project';
 import { buildProjectZip, projectZipFileName } from '../io/export';
 import { parseProjectZipDetailed } from '../io/import';
-import { applyServerAccess, normalizeServerAccess } from '../io/share';
-import type { ServerAccess } from '../io/share';
+import {
+  applyServerAccess,
+  decryptServerAccess,
+  isEncryptedServerAccess,
+  normalizeServerAccess,
+} from '../io/share';
+import type { EncryptedServerAccess, ServerAccess } from '../io/share';
 import { loadSharedProject } from './server-sync';
 import { withProgress } from './progress';
 import {
@@ -122,6 +128,7 @@ export async function importProjectFile(file: File): Promise<void> {
 
   let imported: Project | null = null;
   let access: ServerAccess | null = null;
+  let encryptedAccess: EncryptedServerAccess | null = null;
   let readFailed = false;
   try {
     /* FileReader-Fallback für ältere iOS-/Android-Browser (kein Blob.arrayBuffer). */
@@ -131,8 +138,13 @@ export async function importProjectFile(file: File): Promise<void> {
     );
     imported = parsed.project;
     access = parsed.access;
+    encryptedAccess = parsed.encryptedAccess;
   } catch {
     readFailed = true;
+  }
+  if (encryptedAccess) {
+    await importEncryptedServerAccess(encryptedAccess);
+    return;
   }
   if (!imported) {
     /* Freigabe-ZIPs enthalten nur die Server-Zugangsdaten, keine Projektdateien. */
@@ -216,9 +228,12 @@ export async function importProjectFile(file: File): Promise<void> {
 async function importAccessFile(file: File): Promise<void> {
   try {
     const buffer = await readFileAsArrayBuffer(file);
-    const access = normalizeServerAccess(
-      JSON.parse(new TextDecoder().decode(buffer)) as unknown,
-    );
+    const raw = JSON.parse(new TextDecoder().decode(buffer)) as unknown;
+    if (isEncryptedServerAccess(raw)) {
+      await importEncryptedServerAccess(raw);
+      return;
+    }
+    const access = normalizeServerAccess(raw);
     if (!access) {
       showToast('Die Datei enthält keine gültigen Server-Zugangsdaten.', 'error');
       return;
@@ -227,6 +242,97 @@ async function importAccessFile(file: File): Promise<void> {
   } catch {
     showToast('Die Zugangsdatei konnte nicht gelesen werden.', 'error');
   }
+}
+
+/** Fragt das Passwort für eine verschlüsselte Freigabe ab. */
+function requestSharePassword(
+  projectId: string,
+  error: string | null,
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const input = el('input', {
+      type: 'password',
+      class: 'input',
+      placeholder: 'Passwort',
+      autocomplete: 'current-password',
+      spellcheck: 'false',
+    }) as HTMLInputElement;
+
+    const content = el('div', { class: 'server-form' }, [
+      el('p', { class: 'export-hint' }, [
+        `Die Freigabe für Projekt ${projectId} ist mit einem Passwort geschützt.`,
+      ]),
+      ...(error
+        ? [el('p', { class: 'server-feedback error' }, [error])]
+        : []),
+      el('label', { class: 'field-label' }, ['Passwort']),
+      input,
+    ]);
+
+    const finish = (value: string | null): void => {
+      if (settled) return;
+      settled = true;
+      handle.close();
+      resolve(value);
+    };
+
+    const handle = openModal({
+      title: 'Freigabe entschlüsseln',
+      content,
+      actions: [
+        {
+          label: 'Abbrechen',
+          kind: 'secondary',
+          onClick: () => finish(null),
+        },
+        {
+          label: 'Öffnen',
+          kind: 'primary',
+          onClick: () => {
+            const value = input.value;
+            if (!value) {
+              input.focus();
+              return;
+            }
+            finish(value);
+          },
+        },
+      ],
+      onClose: () => {
+        if (!settled) {
+          settled = true;
+          resolve(null);
+        }
+      },
+    });
+
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      if (input.value) finish(input.value);
+    });
+    input.focus();
+  });
+}
+
+/** Entschlüsselt eine Freigabe und übernimmt anschließend die Zugangsdaten. */
+async function importEncryptedServerAccess(
+  envelope: EncryptedServerAccess,
+): Promise<void> {
+  let error: string | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const password = await requestSharePassword(envelope.projectId, error);
+    if (password === null) return;
+
+    const access = await decryptServerAccess(envelope, password);
+    if (access) {
+      await importServerAccess(access);
+      return;
+    }
+    error = 'Das Passwort ist falsch oder die Freigabe ist beschädigt.';
+  }
+  showToast('Die Freigabe konnte nicht entschlüsselt werden.', 'error');
 }
 
 /**
